@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { FileRecord, VocabWord } from '../types';
+import type { FileRecord } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -12,7 +12,6 @@ interface DocumentViewerProps {
   onAddNote: (quoteText: string, translation?: string) => void;
   onAddVocab: (word: string, exampleSentence: string) => void;
   onTranslate: (text: string) => Promise<string>;
-  vocabWords: VocabWord[];
   onTriggerTranslate: (trigger: { text: string } | null) => void;
 }
 
@@ -61,7 +60,7 @@ function extractOrderedText(items: any[]): string {
     .join('\n');
 }
 
-export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, vocabWords, onTriggerTranslate }: DocumentViewerProps) {
+export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, onTriggerTranslate }: DocumentViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pdfTextsRef = useRef<{ [p: number]: string }>({});
@@ -74,8 +73,6 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
   const [wordContent, setWordContent] = useState('');
   const [translatingAll, setTranslatingAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-
-  const [showMiniVocab, setShowMiniVocab] = useState(false);
 
   // Save scroll position on unmount / tab switch
   useEffect(() => {
@@ -156,7 +153,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
         const ctx = canvas.getContext('2d')!;
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await (page.render as any)({ canvasContext: ctx, viewport }).promise;
         innerBox.appendChild(canvas);
 
         const textLayerDiv = document.createElement('div');

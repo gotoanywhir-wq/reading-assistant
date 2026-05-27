@@ -6,7 +6,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-function extractOrderedText(items: any[]): string {
+function extractOrderedText(items: any[]): string[] {
   const filtered = items
     .filter((item) => item.str && item.str.trim())
     .map((item) => ({
@@ -15,7 +15,7 @@ function extractOrderedText(items: any[]): string {
       y: item.transform[5],
       height: Math.abs(item.transform[0]) || item.height || 10,
     }));
-  if (filtered.length === 0) return '';
+  if (filtered.length === 0) return [];
   const lines: { y: number; items: typeof filtered }[] = [];
   for (const item of filtered) {
     const existing = lines.find((l) => Math.abs(l.y - item.y) < 3);

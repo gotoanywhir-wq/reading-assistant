@@ -231,7 +231,6 @@ function App() {
                 onAddNote={handleAddNote}
                 onAddVocab={handleAddVocabWord}
                 onTranslate={handleTranslate}
-                vocabWords={vocabWords}
                 onTriggerTranslate={setTranslateTrigger}
               />
               <NotePanel

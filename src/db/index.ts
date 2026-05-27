@@ -4,7 +4,8 @@ import type { FileRecord, Note, VocabWord, TranslationSettings } from '../types'
 const DB_NAME = 'reading-assistant';
 const DB_VERSION = 1;
 
-let dbPromise: Promise<IDBDatabase> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let dbPromise: Promise<any> | null = null;
 
 function getDB() {
   if (!dbPromise) {
