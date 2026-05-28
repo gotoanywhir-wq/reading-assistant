@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Translate, X, DotsThree } from '@phosphor-icons/react';
 
 interface TranslationWidgetProps {
   onTranslate: (text: string) => Promise<string>;
@@ -82,51 +83,52 @@ export default function TranslationWidget({ onTranslate, trigger, onTriggerConsu
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-12 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center text-lg transition-colors"
+        className="fixed bottom-6 right-6 z-40 w-12 h-12 bg-teal-600 hover:bg-teal-500 active:scale-[0.95] text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200"
         title="打开翻译窗口"
       >
-        译
+        <Translate size={20} weight="bold" />
       </button>
     );
   }
 
   return (
     <div
-      className="trans-widget fixed z-50 w-[340px] bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden flex flex-col"
+      className="trans-widget fixed z-50 w-[340px] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col"
       style={{ left: position.x, top: position.y, ...(dragging ? { userSelect: 'none' as const } : {}) }}
     >
       {/* Header */}
       <div
         onMouseDown={onDragStart}
-        className="flex items-center justify-between px-3 py-2.5 bg-blue-600 cursor-move select-none"
+        className="flex items-center justify-between px-3 py-2.5 bg-teal-600 dark:bg-teal-700 cursor-move select-none"
       >
         <div className="flex items-center gap-2">
-          <span className="text-white/60 text-xs">⠿</span>
+          <DotsThree size={14} weight="bold" className="text-white/60" />
           <span className="text-xs font-medium text-white">翻译窗口</span>
         </div>
         <button
           onClick={() => setOpen(false)}
-          className="text-white/70 hover:text-white text-sm px-1"
+          className="text-white/70 hover:text-white transition-colors px-1 active:scale-[0.95]"
         >
-          ✕
+          <X size={15} />
         </button>
       </div>
 
       {/* Input */}
-      <div className="p-3 border-b border-gray-100">
+      <div className="p-3 border-b border-zinc-100 dark:border-zinc-800">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="输入英文，按 Enter 翻译"
-          className="w-full text-sm text-gray-800 placeholder-gray-400 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 resize-none outline-none focus:border-blue-400 transition-colors"
+          className="w-full text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 resize-none outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
           rows={3}
         />
         <button
           onClick={handleTranslate}
           disabled={loading || !input.trim()}
-          className="mt-2 w-full py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors disabled:opacity-40"
+          className="mt-2 w-full py-1.5 text-xs bg-teal-600 hover:bg-teal-500 dark:bg-teal-700 dark:hover:bg-teal-600 text-white rounded-md transition-all duration-200 active:scale-[0.97] disabled:opacity-40 flex items-center justify-center gap-1"
         >
+          <Translate size={12} weight="bold" />
           {loading ? '翻译中...' : '翻译'}
         </button>
       </div>
@@ -134,14 +136,14 @@ export default function TranslationWidget({ onTranslate, trigger, onTriggerConsu
       {/* Result */}
       {(result || loading) && (
         <div className="p-3 max-h-[220px] overflow-y-auto">
-          <p className="text-[11px] text-gray-400 mb-1">翻译结果</p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-1">翻译结果</p>
           {loading ? (
             <div className="flex items-center gap-2 py-2">
-              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-sm text-gray-400">正在翻译...</span>
+              <div className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-zinc-400 dark:text-zinc-500">正在翻译...</span>
             </div>
           ) : (
-            <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{result}</p>
+            <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">{result}</p>
           )}
         </div>
       )}

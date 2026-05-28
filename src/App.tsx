@@ -11,6 +11,7 @@ import DocumentViewer from './components/DocumentViewer';
 import NotePanel from './components/NotePanel';
 import VocabPanel from './components/VocabPanel';
 import SettingsPanel from './components/SettingsPanel';
+import { BookOpenText } from '@phosphor-icons/react';
 
 function App() {
   const [files, setFiles] = useState<FileRecord[]>([]);
@@ -28,6 +29,19 @@ function App() {
     youdaoAppSecret: '',
   });
   const [translateTrigger, setTranslateTrigger] = useState<{ text: string } | null>(null);
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const stored = localStorage.getItem('darkMode');
+    return stored === 'true';
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('darkMode', String(darkMode));
+  }, [darkMode]);
+
+  const handleToggleDark = useCallback(() => {
+    setDarkMode(prev => !prev);
+  }, []);
 
   const loadFiles = useCallback(async () => {
     const allFiles = await getFiles();
@@ -268,11 +282,11 @@ function App() {
               onTriggerTranslate={setTranslateTrigger}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
+            <div className="flex-1 flex items-center justify-center text-zinc-400 dark:text-zinc-600 bg-[#f8f8fa] dark:bg-[#0f1117]">
               <div className="text-center">
-                <div className="text-5xl mb-4 opacity-30">📖</div>
+                <BookOpenText size={56} weight="thin" className="mx-auto mb-4 opacity-30" />
                 <p className="text-lg">上传一份文档开始阅读</p>
-                <p className="text-sm mt-1 text-gray-400">支持 PDF 和 Word 文件</p>
+                <p className="text-sm mt-1 text-zinc-400 dark:text-zinc-600">支持 PDF 和 Word 文件</p>
               </div>
             </div>
           )}
@@ -301,6 +315,8 @@ function App() {
           onSave={handleSaveSettings}
           onExport={handleExportData}
           onImport={handleImportData}
+          darkMode={darkMode}
+          onToggleDark={handleToggleDark}
         />
       )}
       <TranslationWidget onTranslate={handleTranslate} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />
