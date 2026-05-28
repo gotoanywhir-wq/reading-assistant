@@ -17,7 +17,7 @@ export default function Layout({ activeTab, onTabChange, children }: LayoutProps
     <div className="h-screen flex flex-col bg-[#f5f5f7]">
       <nav className="flex items-center h-[52px] border-b border-gray-200 bg-white px-4 shrink-0 shadow-sm">
         <div className="text-lg font-semibold text-gray-800 mr-8 tracking-tight">
-          ReadAssist
+          小睿快读
         </div>
         <div className="flex gap-1">
           {tabs.map((tab) => (
