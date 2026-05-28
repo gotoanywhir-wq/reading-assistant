@@ -15,22 +15,24 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
     <div className="w-[340px] border-l border-gray-200 bg-white flex flex-col shrink-0">
       <div className="p-3 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-medium text-gray-700 truncate">{fileName}</h2>
-        <div className="flex gap-1.5">
-          <button
-            onClick={onExport}
-            className="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors"
-            title="导出笔记为Word"
-          >
-            导出
-          </button>
-          <button
-            onClick={onClear}
-            className="px-2.5 py-1 text-xs bg-red-50 hover:bg-red-100 text-red-500 rounded transition-colors"
-            title="清除所有笔记"
-          >
-            清除
-          </button>
-        </div>
+        {notes.length > 0 && (
+          <div className="flex gap-1.5">
+            <button
+              onClick={onExport}
+              className="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors"
+              title="导出笔记为Word"
+            >
+              导出
+            </button>
+            <button
+              onClick={onClear}
+              className="px-2.5 py-1 text-xs bg-red-50 hover:bg-red-100 text-red-500 rounded transition-colors"
+              title="清除所有笔记"
+            >
+              清除
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">

@@ -223,25 +223,16 @@ function App() {
             onUpload={handleFileUpload}
             onConvertPdf={handleConvertPdf}
             vocabWords={vocabWords}
+            onVocabUpdate={handleUpdateVocabWord}
           />
           {currentFile ? (
-            <>
-              <DocumentViewer
-                file={currentFile}
-                onAddNote={handleAddNote}
-                onAddVocab={handleAddVocabWord}
-                onTranslate={handleTranslate}
-                onTriggerTranslate={setTranslateTrigger}
-              />
-              <NotePanel
-                notes={notes}
-                fileName={currentFile.name}
-                onUpdate={handleUpdateNote}
-                onDelete={handleDeleteNote}
-                onClear={handleClearNotes}
-                onExport={handleExportNotes}
-              />
-            </>
+            <DocumentViewer
+              file={currentFile}
+              onAddNote={handleAddNote}
+              onAddVocab={handleAddVocabWord}
+              onTranslate={handleTranslate}
+              onTriggerTranslate={setTranslateTrigger}
+            />
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
               <div className="text-center">
@@ -251,6 +242,14 @@ function App() {
               </div>
             </div>
           )}
+          <NotePanel
+            notes={notes}
+            fileName={currentFile?.name || '读书笔记'}
+            onUpdate={handleUpdateNote}
+            onDelete={handleDeleteNote}
+            onClear={handleClearNotes}
+            onExport={handleExportNotes}
+          />
         </div>
       )}
       {activeTab === 'vocabulary' && (

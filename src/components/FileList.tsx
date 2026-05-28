@@ -9,9 +9,10 @@ interface FileListProps {
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onConvertPdf: (file: FileRecord) => void;
   vocabWords: VocabWord[];
+  onVocabUpdate: (word: VocabWord) => void;
 }
 
-export default function FileList({ files, currentFileId, onSelect, onDelete, onUpload, onConvertPdf, vocabWords }: FileListProps) {
+export default function FileList({ files, currentFileId, onSelect, onDelete, onUpload, onConvertPdf, vocabWords, onVocabUpdate }: FileListProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
@@ -96,11 +97,18 @@ export default function FileList({ files, currentFileId, onSelect, onDelete, onU
             <p className="text-gray-400 text-[11px] text-center mt-4 px-3">暂无单词</p>
           )}
           {vocabWords.slice().reverse().slice(0, 30).map((w) => (
-            <div key={w.id} className="px-3 py-1.5 border-b border-gray-50">
+            <div key={w.id} className="px-3 py-1.5 border-b border-gray-50 group">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-xs font-medium text-gray-800">{w.word}</span>
                 {w.meaning && <span className="text-[11px] text-gray-500">{w.meaning}</span>}
               </div>
+              <textarea
+                value={w.comment}
+                onChange={(e) => onVocabUpdate({ ...w, comment: e.target.value })}
+                placeholder="添加备注..."
+                className="w-full mt-1 bg-transparent text-[11px] text-gray-600 placeholder-gray-300 resize-none outline-none leading-snug"
+                rows={1}
+              />
             </div>
           ))}
           {vocabWords.length > 30 && (

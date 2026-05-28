@@ -1,63 +1,42 @@
 import type { TranslationSettings } from '../types';
 
-async function translateMyMemory(text: string): Promise<string> {
-  // Try fetch first, fall back to JSONP
-  try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`;
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.responseStatus === 200 && data.responseData?.translatedText) {
-      return data.responseData.translatedText;
-    }
-    throw new Error(data.responseDetails || '翻译请求失败');
-  } catch (fetchErr) {
-    console.warn('Fetch failed, trying JSONP:', fetchErr);
-    return translateMyMemoryJsonp(text);
-  }
+const isDev = import.meta.env.DEV;
+
+function corsProxy(url: string): string {
+  if (isDev) return url;
+  return `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
 }
 
-function translateMyMemoryJsonp(text: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const callbackName = `_mymemory_${Date.now()}`;
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('翻译请求超时'));
-    }, 10000);
-
-    function cleanup() {
-      clearTimeout(timeout);
-      delete (window as any)[callbackName];
-      const script = document.getElementById(`jsonp-${callbackName}`);
-      if (script) script.remove();
-    }
-
-    (window as any)[callbackName] = (data: any) => {
-      cleanup();
-      if (data.responseStatus === 200 && data.responseData?.translatedText) {
-        resolve(data.responseData.translatedText);
-      } else {
-        reject(new Error(data.responseDetails || '翻译请求失败'));
-      }
-    };
-
-    const script = document.createElement('script');
-    script.id = `jsonp-${callbackName}`;
-    script.src = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN&callback=${callbackName}`;
-    script.onerror = () => {
-      cleanup();
-      reject(new Error('网络请求失败，请检查网络连接'));
-    };
-    document.head.appendChild(script);
-  });
+async function translateMyMemory(text: string): Promise<string> {
+  const target = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`;
+  const res = await fetch(isDev ? target.replace('https://api.mymemory.translated.net', '/api/mymemory') : corsProxy(target));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.responseStatus === 200 && data.responseData?.translatedText) {
+    return data.responseData.translatedText;
+  }
+  throw new Error(data.responseDetails || '翻译请求失败');
 }
 
 async function translateDeepL(text: string, apiKey: string): Promise<string> {
   const isFreeKey = apiKey.endsWith(':fx');
-  const baseUrl = isFreeKey
+  const targetUrl = isFreeKey
     ? 'https://api-free.deepl.com/v2/translate'
     : 'https://api.deepl.com/v2/translate';
-  const res = await fetch(baseUrl, {
+  if (isDev) {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `DeepL-Auth-Key ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: [text], target_lang: 'ZH' }),
+    });
+    const data = await res.json();
+    if (data.translations?.[0]?.text) return data.translations[0].text;
+    throw new Error('DeepL translation failed');
+  }
+  const res = await fetch(corsProxy(targetUrl), {
     method: 'POST',
     headers: {
       'Authorization': `DeepL-Auth-Key ${apiKey}`,
@@ -66,16 +45,17 @@ async function translateDeepL(text: string, apiKey: string): Promise<string> {
     body: JSON.stringify({ text: [text], target_lang: 'ZH' }),
   });
   const data = await res.json();
-  if (data.translations?.[0]?.text) {
-    return data.translations[0].text;
-  }
+  if (data.translations?.[0]?.text) return data.translations[0].text;
   throw new Error('DeepL translation failed');
 }
 
 async function translateBaidu(text: string, appId: string, secretKey: string): Promise<string> {
   const salt = Date.now().toString();
   const sign = await md5(appId + text + salt + secretKey);
-  const url = `https://api.fanyi.baidu.com/api/trans/vip/translate?q=${encodeURIComponent(text)}&from=en&to=zh&appid=${appId}&salt=${salt}&sign=${sign}`;
+  const target = `https://api.fanyi.baidu.com/api/trans/vip/translate?q=${encodeURIComponent(text)}&from=en&to=zh&appid=${appId}&salt=${salt}&sign=${sign}`;
+  const url = isDev
+    ? target.replace('https://api.fanyi.baidu.com', '/api/baidu')
+    : corsProxy(target);
   const res = await fetch(url);
   const data = await res.json();
   if (data.trans_result?.[0]?.dst) {
@@ -105,7 +85,10 @@ async function translateYoudao(text: string, appId: string, appSecret: string): 
   const truncated = text.length <= 20 ? text : text.substring(0, 10) + text.length + text.substring(text.length - 10);
   const signStr = appId + truncated + salt + curtime + appSecret;
   const sign = await sha256(signStr);
-  const url = `https://openapi.youdao.com/api?q=${encodeURIComponent(text)}&from=en&to=zh-CHS&appKey=${appId}&salt=${salt}&sign=${sign}&signType=v3&curtime=${curtime}`;
+  const target = `https://openapi.youdao.com/api?q=${encodeURIComponent(text)}&from=en&to=zh-CHS&appKey=${appId}&salt=${salt}&sign=${sign}&signType=v3&curtime=${curtime}`;
+  const url = isDev
+    ? target.replace('https://openapi.youdao.com', '/api/youdao')
+    : corsProxy(target);
   const res = await fetch(url);
   const data = await res.json();
   if (data.translation?.[0]) {
