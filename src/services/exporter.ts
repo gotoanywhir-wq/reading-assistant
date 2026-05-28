@@ -13,10 +13,15 @@ export async function exportNotesToWord(notes: Note[], fileName: string): Promis
   );
 
   for (const note of notes) {
+    const isImportant = note.priority === 'important';
+    const label = isImportant ? '🔴 重点笔记' : '💚 非重点笔记';
+    const labelColor = isImportant ? 'CC0000' : '2E8B57';
+    const borderColor = isImportant ? 'CC0000' : 'CCCCCC';
+
     sections.push(
       new Paragraph({
         children: [
-          new TextRun({ text: '原文引用', bold: true, color: '666666' }),
+          new TextRun({ text: label, bold: true, color: labelColor, size: 20 }),
         ],
         spacing: { before: 300 },
       })
@@ -26,7 +31,7 @@ export async function exportNotesToWord(notes: Note[], fileName: string): Promis
         children: [new TextRun({ text: note.quoteText, italics: true })],
         spacing: { after: 100 },
         border: {
-          left: { style: BorderStyle.SINGLE, size: 6, color: 'CCCCCC', space: 10 },
+          left: { style: BorderStyle.SINGLE, size: 6, color: borderColor, space: 10 },
         },
         indent: { left: 400 },
       })
