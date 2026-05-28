@@ -7,13 +7,14 @@ interface NotePanelProps {
   onUpdate: (note: Note) => void;
   onDelete: (id: string) => void;
   onClear: () => void;
-  onExport: () => void;
+  onExport: (scope: 'all' | 'important' | 'normal') => void;
 }
 
 type Filter = 'all' | 'important' | 'normal';
 
 export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear, onExport }: NotePanelProps) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [exportOpen, setExportOpen] = useState(false);
 
   const filtered = filter === 'all' ? notes : notes.filter((n) => n.priority === filter);
   const importantCount = notes.filter((n) => n.priority === 'important').length;
@@ -25,13 +26,31 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
         <h2 className="text-sm font-medium text-gray-700 truncate">{fileName}</h2>
         {notes.length > 0 && (
           <div className="flex gap-1.5">
-            <button
-              onClick={onExport}
-              className="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors"
-              title="导出笔记为Word"
-            >
-              导出
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                className="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors"
+              >
+                导出 ▾
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1 min-w-[120px]">
+                  {([
+                    { id: 'all' as const, label: '全部笔记' },
+                    { id: 'important' as const, label: '🔴 重点笔记' },
+                    { id: 'normal' as const, label: '💚 非重点笔记' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => { onExport(opt.id); setExportOpen(false); }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={onClear}
               className="px-2.5 py-1 text-xs bg-red-50 hover:bg-red-100 text-red-500 rounded transition-colors"

@@ -170,12 +170,13 @@ function App() {
     return translate(text, settings);
   };
 
-  const handleExportNotes = async () => {
-    if (notes.length === 0) {
-      alert('当前没有笔记可导出');
+  const handleExportNotes = async (scope: 'all' | 'important' | 'normal') => {
+    const filtered = scope === 'all' ? notes : notes.filter((n) => n.priority === scope);
+    if (filtered.length === 0) {
+      alert('没有可导出的笔记');
       return;
     }
-    await exportNotesToWord(notes, currentFile?.name || '读书笔记');
+    await exportNotesToWord(filtered, currentFile?.name || '读书笔记');
   };
 
   const handleExportVocab = async () => {
