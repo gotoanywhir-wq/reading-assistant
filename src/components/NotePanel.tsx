@@ -10,7 +10,15 @@ interface NotePanelProps {
   onExport: () => void;
 }
 
+type Filter = 'all' | 'important' | 'normal';
+
 export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear, onExport }: NotePanelProps) {
+  const [filter, setFilter] = useState<Filter>('all');
+
+  const filtered = filter === 'all' ? notes : notes.filter((n) => n.priority === filter);
+  const importantCount = notes.filter((n) => n.priority === 'important').length;
+  const normalCount = notes.filter((n) => n.priority === 'normal').length;
+
   return (
     <div className="w-[340px] border-l border-gray-200 bg-white flex flex-col shrink-0">
       <div className="p-3 border-b border-gray-100 flex items-center justify-between">
@@ -35,11 +43,33 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
         )}
       </div>
 
+      {notes.length > 0 && (
+        <div className="flex gap-1 px-3 py-2 border-b border-gray-100">
+          {([
+            { id: 'all' as const, label: `全部 ${notes.length}` },
+            { id: 'important' as const, label: `🔴 ${importantCount}` },
+            { id: 'normal' as const, label: `💚 ${normalCount}` },
+          ]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id)}
+              className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                filter === tab.id
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {notes.length === 0 && (
           <p className="text-gray-400 text-xs text-center mt-8">选中原文即可摘录到笔记</p>
         )}
-        {notes.map((note) => (
+        {filtered.map((note) => (
           <NoteCard key={note.id} note={note} onUpdate={onUpdate} onDelete={onDelete} />
         ))}
       </div>
@@ -65,9 +95,17 @@ function NoteCard({ note, onUpdate, onDelete }: { note: Note; onUpdate: (note: N
     }
   };
 
+  const togglePriority = () => {
+    onUpdate({ ...note, priority: note.priority === 'important' ? 'normal' : 'important' });
+  };
+
+  const borderColor = note.priority === 'important' ? 'border-red-400' : 'border-blue-400';
+
   return (
-    <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden group">
-      <div className="px-3 pt-3 pb-1.5 border-l-2 border-blue-400">
+    <div className={`bg-gray-50 rounded-lg border overflow-hidden group ${
+      note.priority === 'important' ? 'border-red-200' : 'border-gray-100'
+    }`}>
+      <div className={`px-3 pt-3 pb-1.5 border-l-2 ${borderColor}`}>
         <p className="text-xs text-gray-400 mb-1">原文引用</p>
         <p className="text-sm text-gray-700 italic leading-relaxed">{note.quoteText}</p>
       </div>
@@ -92,9 +130,22 @@ function NoteCard({ note, onUpdate, onDelete }: { note: Note; onUpdate: (note: N
       </div>
 
       <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50">
-        <span className="text-[10px] text-gray-400">
-          {new Date(note.createdAt).toLocaleString('zh-CN')}
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={togglePriority}
+            className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+              note.priority === 'important'
+                ? 'bg-red-100 text-red-600'
+                : 'bg-green-100 text-green-600'
+            }`}
+            title={note.priority === 'important' ? '标记为非重点' : '标记为重点'}
+          >
+            {note.priority === 'important' ? '🔴 重点' : '💚 非重点'}
+          </button>
+          <span className="text-[10px] text-gray-400">
+            {new Date(note.createdAt).toLocaleString('zh-CN')}
+          </span>
+        </div>
         <button
           onClick={() => {
             if (confirm('删除这条笔记？')) onDelete(note.id);

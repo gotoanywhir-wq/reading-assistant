@@ -105,6 +105,7 @@ function App() {
       quoteText,
       translation: translation || '',
       userNote: '',
+      priority: 'normal',
       createdAt: Date.now(),
     };
     await saveNote(note);

@@ -12,6 +12,7 @@ export interface Note {
   quoteText: string;
   translation: string;
   userNote: string;
+  priority: 'important' | 'normal';
   createdAt: number;
 }
 

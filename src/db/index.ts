@@ -2,7 +2,7 @@ import { openDB } from 'idb';
 import type { FileRecord, Note, VocabWord, TranslationSettings } from '../types';
 
 const DB_NAME = 'reading-assistant';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbPromise: Promise<any> | null = null;
