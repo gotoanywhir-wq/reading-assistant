@@ -126,3 +126,39 @@ export async function saveSettings(settings: TranslationSettings): Promise<void>
   const db = await getDB();
   await db.put('settings', settings);
 }
+
+// Export all data (notes, vocabulary, settings) as JSON
+export async function exportAllData(): Promise<string> {
+  const db = await getDB();
+  const notes = await db.getAll('notes');
+  const vocabulary = await db.getAll('vocabulary');
+  const settings = await db.get('settings', SETTINGS_ID);
+  return JSON.stringify({ notes, vocabulary, settings, version: 1 }, null, 2);
+}
+
+// Import data from JSON, merging with existing data
+export async function importAllData(json: string): Promise<{ notes: number; vocab: number }> {
+  const data = JSON.parse(json);
+  if (!data.version) throw new Error('无效的备份文件');
+  const db = await getDB();
+  const tx = db.transaction(['notes', 'vocabulary', 'settings'], 'readwrite');
+  let notes = 0;
+  let vocab = 0;
+  if (Array.isArray(data.notes)) {
+    for (const note of data.notes) {
+      await tx.objectStore('notes').put(note);
+      notes++;
+    }
+  }
+  if (Array.isArray(data.vocabulary)) {
+    for (const word of data.vocabulary) {
+      await tx.objectStore('vocabulary').put(word);
+      vocab++;
+    }
+  }
+  if (data.settings) {
+    await tx.objectStore('settings').put(data.settings);
+  }
+  await tx.done;
+  return { notes, vocab };
+}

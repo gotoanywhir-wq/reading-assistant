@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { FileRecord, Note, VocabWord, TranslationSettings } from './types';
-import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings } from './db';
+import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData } from './db';
 import { translate } from './services/translator';
 import { exportNotesToWord, exportVocabToWord } from './services/exporter';
 import { convertPdfToDocx } from './services/pdfConverter';
@@ -192,6 +192,38 @@ function App() {
     setSettings(s);
   };
 
+  const handleExportData = async () => {
+    const json = await exportAllData();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `小睿快读_备份_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const result = await importAllData(text);
+        await loadNotes(currentFile?.id || '');
+        await loadVocab();
+        await loadSettings();
+        alert(`导入成功：${result.notes} 条笔记，${result.vocab} 个单词`);
+      } catch (err) {
+        alert('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'));
+      }
+    };
+    input.click();
+  };
+
   const handleConvertPdf = async (file: FileRecord) => {
     try {
       const docxBlob = await convertPdfToDocx(file.blob);
@@ -267,6 +299,8 @@ function App() {
         <SettingsPanel
           settings={settings}
           onSave={handleSaveSettings}
+          onExport={handleExportData}
+          onImport={handleImportData}
         />
       )}
       <TranslationWidget onTranslate={handleTranslate} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />

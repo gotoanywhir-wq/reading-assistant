@@ -4,9 +4,11 @@ import type { TranslationSettings } from '../types';
 interface SettingsPanelProps {
   settings: TranslationSettings;
   onSave: (settings: TranslationSettings) => void;
+  onExport: () => void;
+  onImport: () => void;
 }
 
-export default function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
+export default function SettingsPanel({ settings, onSave, onExport, onImport }: SettingsPanelProps) {
   const [form, setForm] = useState<TranslationSettings>({ ...settings });
   const [saved, setSaved] = useState(false);
 
@@ -134,6 +136,27 @@ export default function SettingsPanel({ settings, onSave }: SettingsPanelProps) 
           >
             {saved ? '已保存' : '保存设置'}
           </button>
+        </div>
+
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">数据管理</h2>
+          <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+            <p className="text-xs text-gray-500 leading-relaxed">导出你的笔记、单词本和设置到 JSON 文件，可在其他设备导入恢复。文档文件需重新上传。</p>
+            <div className="flex gap-2">
+              <button
+                onClick={onExport}
+                className="flex-1 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors"
+              >
+                导出数据
+              </button>
+              <button
+                onClick={onImport}
+                className="flex-1 py-2 text-sm bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-md transition-colors"
+              >
+                导入数据
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-10 p-4 bg-white rounded-lg border border-gray-200">
