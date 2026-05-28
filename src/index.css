@@ -84,3 +84,26 @@ body {
 .pdf-page-wrapper {
   margin-bottom: 32px;
 }
+
+/* Dark mode: keep prose text same as light mode */
+.dark .prose {
+  --tw-prose-body: #374151;
+  --tw-prose-headings: #111827;
+  --tw-prose-bold: #1f2937;
+  --tw-prose-links: #374151;
+  color: #374151;
+}
+.dark .prose p,
+.dark .prose li,
+.dark .prose td,
+.dark .prose th,
+.dark .prose em {
+  color: #374151;
+}
+.dark .prose h1,
+.dark .prose h2,
+.dark .prose h3,
+.dark .prose h4,
+.dark .prose strong {
+  color: #111827;
+}

@@ -357,7 +357,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       {file.type === 'word' && wordContent && (
         <div className="p-6">
           <div
-            className="prose max-w-none prose-p:text-gray-700 prose-h1:text-gray-900 prose-h2:text-gray-900 prose-h3:text-gray-800 prose-strong:text-gray-800 prose-em:text-gray-600 prose-li:text-gray-700 prose-a:text-blue-600"
+            className="prose max-w-none prose-p:text-gray-700 dark:prose-p:text-zinc-300 prose-h1:text-gray-900 dark:prose-h1:text-zinc-200 prose-h2:text-gray-900 dark:prose-h2:text-zinc-200 prose-h3:text-gray-800 dark:prose-h3:text-zinc-300 prose-strong:text-gray-800 dark:prose-strong:text-zinc-200 prose-em:text-gray-600 dark:prose-em:text-zinc-400 prose-li:text-gray-700 dark:prose-li:text-zinc-300 prose-a:text-blue-600 dark:prose-a:text-zinc-300"
             dangerouslySetInnerHTML={{ __html: wordContent }}
           />
         </div>
