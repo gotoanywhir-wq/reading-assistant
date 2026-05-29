@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { FileRecord } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
+import 'pdfjs-dist/web/pdf_viewer.css';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -167,6 +168,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
 
         const textLayerDiv = document.createElement('div');
         textLayerDiv.className = 'textLayer';
+        textLayerDiv.style.setProperty('--total-scale-factor', `${pdfScale}`);
         const textContent = await page.getTextContent();
         texts[i] = extractOrderedText(textContent.items);
         const textLayer = new pdfjsLib.TextLayer({
