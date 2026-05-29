@@ -7,15 +7,42 @@ function corsProxy(url: string): string {
   return `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
 }
 
-async function translateMyMemory(text: string): Promise<string> {
-  const target = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`;
-  const res = await fetch(isDev ? target.replace('https://api.mymemory.translated.net', '/api/mymemory') : corsProxy(target));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.responseStatus === 200 && data.responseData?.translatedText) {
-    return data.responseData.translatedText;
+const MYMEMORY_MAX_CHARS = 500;
+
+function splitText(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining);
+      break;
+    }
+    let cut = remaining.lastIndexOf('\n', maxLen);
+    if (cut === -1 || cut < maxLen * 0.3) cut = remaining.lastIndexOf('. ', maxLen);
+    if (cut === -1 || cut < maxLen * 0.3) cut = remaining.lastIndexOf(' ', maxLen);
+    if (cut === -1) cut = maxLen;
+    chunks.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut).trimStart();
   }
-  throw new Error(data.responseDetails || '翻译请求失败');
+  return chunks;
+}
+
+async function translateMyMemory(text: string): Promise<string> {
+  const chunks = splitText(text, MYMEMORY_MAX_CHARS);
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const target = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|zh-CN`;
+      const res = await fetch(isDev ? target.replace('https://api.mymemory.translated.net', '/api/mymemory') : corsProxy(target));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.responseStatus === 200 && data.responseData?.translatedText) {
+        return data.responseData.translatedText;
+      }
+      throw new Error(data.responseDetails || '翻译请求失败');
+    })
+  );
+  return results.join('\n');
 }
 
 async function translateDeepL(text: string, apiKey: string): Promise<string> {
