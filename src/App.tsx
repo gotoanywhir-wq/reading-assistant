@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FileRecord, Note, VocabWord, TranslationSettings } from './types';
 import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData } from './db';
 import { translate } from './services/translator';
@@ -29,11 +29,14 @@ function App() {
     youdaoAppSecret: '',
   });
   const [translateTrigger, setTranslateTrigger] = useState<{ text: string } | null>(null);
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const stored = localStorage.getItem('darkMode');
-    return stored === 'true';
-  });
+  const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('darkMode') === 'true');
   const [fileListOpen, setFileListOpen] = useState(true);
+
+  // Stable ref for settings so callbacks always read latest
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const currentFileRef = useRef(currentFile);
+  currentFileRef.current = currentFile;
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -42,45 +45,144 @@ function App() {
 
   const handleToggleDark = useCallback(() => setDarkMode(prev => !prev), []);
 
-  const loadFiles = useCallback(async () => { const all = await getFiles(); setFiles(all); }, []);
-  const loadNotes = useCallback(async (fid: string) => { const n = await getNotesByFile(fid); setNotes(n.sort((a, b) => a.createdAt - b.createdAt)); }, []);
-  const loadVocab = useCallback(async () => { const w = await getAllVocabWords(); setVocabWords(w.sort((a, b) => a.createdAt - b.createdAt)); }, []);
+  const loadFiles = useCallback(async () => { setFiles(await getFiles()); }, []);
+  const loadNotes = useCallback(async (fid: string) => {
+    const n = await getNotesByFile(fid);
+    setNotes(n.sort((a, b) => a.createdAt - b.createdAt));
+  }, []);
+  const loadVocab = useCallback(async () => {
+    const w = await getAllVocabWords();
+    setVocabWords(w.sort((a, b) => a.createdAt - b.createdAt));
+  }, []);
   const loadSettings = useCallback(async () => { setSettings(await getSettings()); }, []);
 
   useEffect(() => { loadFiles(); loadVocab(); loadSettings(); }, [loadFiles, loadVocab, loadSettings]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
     const ext = f.name.split('.').pop()?.toLowerCase();
     const type: 'pdf' | 'word' = ext === 'pdf' ? 'pdf' : 'word';
     if (ext !== 'pdf' && ext !== 'doc' && ext !== 'docx') { alert('仅支持 PDF 和 Word 文件'); return; }
     const rec: FileRecord = { id: crypto.randomUUID(), name: f.name, type, blob: f, createdAt: Date.now() };
     await saveFile(rec); await loadFiles(); setCurrentFile(rec); await loadNotes(rec.id); setActiveTab('reading'); e.target.value = '';
-  };
+  }, [loadFiles, loadNotes]);
 
-  const handleSelectFile = async (f: FileRecord) => { setCurrentFile(f); await loadNotes(f.id); setActiveTab('reading'); };
-  const handleDeleteFile = async (id: string) => { await deleteFile(id); await loadFiles(); if (currentFile?.id === id) { setCurrentFile(null); setNotes([]); } };
+  const handleSelectFile = useCallback(async (f: FileRecord) => {
+    setCurrentFile(f); await loadNotes(f.id); setActiveTab('reading');
+  }, [loadNotes]);
 
-  const handleAddNote = async (qt: string, tr?: string) => { if (!currentFile) return; const n: Note = { id: crypto.randomUUID(), fileId: currentFile.id, quoteText: qt, translation: tr || '', userNote: '', priority: 'normal', createdAt: Date.now() }; await saveNote(n); await loadNotes(currentFile.id); };
-  const handleUpdateNote = async (n: Note) => { await saveNote(n); await loadNotes(currentFile!.id); };
-  const handleDeleteNote = async (id: string) => { await deleteNote(id); await loadNotes(currentFile!.id); };
-  const handleClearNotes = async () => { if (!confirm('确定要清除所有笔记吗？此操作不可撤销。')) return; await clearAllNotes(); setNotes([]); if (currentFile) await loadNotes(currentFile.id); };
+  const handleDeleteFile = useCallback(async (id: string) => {
+    await deleteFile(id); await loadFiles();
+    setCurrentFile(prev => { if (prev?.id === id) { setNotes([]); return null; } return prev; });
+  }, [loadFiles]);
 
-  const handleAddVocabWord = async (word: string, ex: string) => { let m = ''; try { m = await translate(word, settings); } catch {} const item: VocabWord = { id: crypto.randomUUID(), word, meaning: m, exampleSentence: ex, comment: '', sourceFileId: currentFile?.id || '', sourceFileName: currentFile?.name || '', createdAt: Date.now() }; await saveVocabWord(item); await loadVocab(); };
-  const handleUpdateVocabWord = async (w: VocabWord) => { await saveVocabWord(w); await loadVocab(); };
-  const handleDeleteVocabWord = async (id: string) => { await deleteVocabWord(id); await loadVocab(); };
-  const handleClearVocab = async () => { if (!confirm('确定要清除所有单词吗？此操作不可撤销。')) return; await clearAllVocab(); setVocabWords([]); };
+  const handleAddNote = useCallback(async (qt: string, tr?: string) => {
+    const cf = currentFileRef.current; if (!cf) return;
+    const n: Note = { id: crypto.randomUUID(), fileId: cf.id, quoteText: qt, translation: tr || '', userNote: '', priority: 'normal', createdAt: Date.now() };
+    await saveNote(n); await loadNotes(cf.id);
+  }, [loadNotes]);
 
-  const handleTranslate = async (text: string): Promise<string> => translate(text, settings);
+  const handleUpdateNote = useCallback(async (n: Note) => {
+    await saveNote(n); await loadNotes(currentFileRef.current!.id);
+  }, [loadNotes]);
 
-  const handleExportNotes = async (scope: 'all' | 'important' | 'normal') => { const f = scope === 'all' ? notes : notes.filter(n => n.priority === scope); if (!f.length) { alert('没有可导出的笔记'); return; } await exportNotesToWord(f, currentFile?.name || '读书笔记'); };
-  const handleExportVocab = async () => { if (!vocabWords.length) { alert('单词本为空'); return; } await exportVocabToWord(vocabWords); };
-  const handleSaveSettings = async (s: TranslationSettings) => { await saveSettings(s); setSettings(s); };
+  const handleDeleteNote = useCallback(async (id: string) => {
+    await deleteNote(id); await loadNotes(currentFileRef.current!.id);
+  }, [loadNotes]);
 
-  const handleExportData = async () => { const j = await exportAllData(); const b = new Blob([j], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `小睿快读_备份_${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(u); };
-  const handleImportData = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json'; i.onchange = async (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return; try { const t = await f.text(); const r = await importAllData(t); await loadNotes(currentFile?.id || ''); await loadVocab(); await loadSettings(); alert(`导入成功：${r.notes} 条笔记，${r.vocab} 个单词`); } catch (err) { alert('导入失败：' + (err instanceof Error ? err.message : '文件格式错误')); } }; i.click(); };
+  const handleClearNotes = useCallback(async () => {
+    if (!confirm('确定要清除所有笔记吗？此操作不可撤销。')) return;
+    await clearAllNotes(); setNotes([]);
+    const cf = currentFileRef.current; if (cf) await loadNotes(cf.id);
+  }, [loadNotes]);
 
-  const handleConvertPdf = async (file: FileRecord) => { try { const b = await convertPdfToDocx(file.blob); const n = file.name.replace(/\.pdf$/i, '') + '.docx'; const r: FileRecord = { id: crypto.randomUUID(), name: n, type: 'word', blob: b, createdAt: Date.now() }; await saveFile(r); await loadFiles(); setCurrentFile(r); await loadNotes(r.id); setActiveTab('reading'); } catch (err) { alert('转换失败: ' + (err instanceof Error ? err.message : '未知错误')); } };
+  // Optimistic vocab add — no full DB reload
+  const handleAddVocabWord = useCallback(async (word: string, ex: string) => {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    // Insert optimistic entry immediately
+    const optimistic: VocabWord = {
+      id, word, meaning: '…', exampleSentence: ex, comment: '',
+      sourceFileId: currentFileRef.current?.id || '',
+      sourceFileName: currentFileRef.current?.name || '',
+      createdAt: now,
+    };
+    setVocabWords(prev => [...prev, optimistic]);
+    try {
+      const m = await translate(word, settingsRef.current);
+      const saved: VocabWord = { ...optimistic, meaning: m || '' };
+      await saveVocabWord(saved);
+      setVocabWords(prev => prev.map(w => w.id === id ? saved : w));
+    } catch {
+      const saved: VocabWord = { ...optimistic, meaning: '' };
+      await saveVocabWord(saved);
+      setVocabWords(prev => prev.map(w => w.id === id ? saved : w));
+    }
+  }, []);
+
+  // Optimistic vocab update — just update state, debounce DB save
+  const handleUpdateVocabWord = useCallback((w: VocabWord) => {
+    setVocabWords(prev => prev.map(v => v.id === w.id ? w : v));
+    saveVocabWord(w); // fire-and-forget
+  }, []);
+
+  const handleDeleteVocabWord = useCallback(async (id: string) => {
+    setVocabWords(prev => prev.filter(w => w.id !== id));
+    await deleteVocabWord(id);
+  }, []);
+
+  const handleClearVocab = useCallback(async () => {
+    if (!confirm('确定要清除所有单词吗？此操作不可撤销。')) return;
+    await clearAllVocab(); setVocabWords([]);
+  }, []);
+
+  // STABLE — this is the critical one, DocumentViewer depends on it
+  const handleTranslate = useCallback(async (text: string): Promise<string> => {
+    return translate(text, settingsRef.current);
+  }, []);
+
+  const handleExportNotes = useCallback(async (scope: 'all' | 'important' | 'normal') => {
+    const f = scope === 'all' ? notes : notes.filter(n => n.priority === scope);
+    if (!f.length) { alert('没有可导出的笔记'); return; }
+    await exportNotesToWord(f, currentFileRef.current?.name || '读书笔记');
+  }, [notes]);
+
+  const handleExportVocab = useCallback(async () => {
+    if (!vocabWords.length) { alert('单词本为空'); return; }
+    await exportVocabToWord(vocabWords);
+  }, [vocabWords]);
+
+  const handleSaveSettings = useCallback(async (s: TranslationSettings) => {
+    await saveSettings(s); setSettings(s);
+  }, []);
+
+  const handleExportData = useCallback(async () => {
+    const j = await exportAllData(); const b = new Blob([j], { type: 'application/json' });
+    const u = URL.createObjectURL(b); const a = document.createElement('a');
+    a.href = u; a.download = `小睿快读_备份_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); URL.revokeObjectURL(u);
+  }, []);
+
+  const handleImportData = useCallback(() => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = '.json';
+    i.onchange = async (e) => {
+      const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
+      try {
+        const t = await f.text(); const r = await importAllData(t);
+        await loadNotes(currentFileRef.current?.id || ''); await loadVocab(); await loadSettings();
+        alert(`导入成功：${r.notes} 条笔记，${r.vocab} 个单词`);
+      } catch (err) { alert('导入失败：' + (err instanceof Error ? err.message : '文件格式错误')); }
+    }; i.click();
+  }, [loadNotes, loadVocab, loadSettings]);
+
+  const handleConvertPdf = useCallback(async (file: FileRecord) => {
+    try {
+      const b = await convertPdfToDocx(file.blob);
+      const n = file.name.replace(/\.pdf$/i, '') + '.docx';
+      const r: FileRecord = { id: crypto.randomUUID(), name: n, type: 'word', blob: b, createdAt: Date.now() };
+      await saveFile(r); await loadFiles(); setCurrentFile(r); await loadNotes(r.id); setActiveTab('reading');
+    } catch (err) { alert('转换失败: ' + (err instanceof Error ? err.message : '未知错误')); }
+  }, [loadFiles, loadNotes]);
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
