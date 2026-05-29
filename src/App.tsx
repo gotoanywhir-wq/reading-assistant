@@ -31,8 +31,8 @@ function App() {
   const [translateTrigger, setTranslateTrigger] = useState<{ text: string } | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('darkMode') === 'true');
   const [fileListOpen, setFileListOpen] = useState(true);
+  const [highlightTarget, setHighlightTarget] = useState<Note | null>(null);
 
-  // Stable ref for settings so callbacks always read latest
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const currentFileRef = useRef(currentFile);
@@ -76,9 +76,13 @@ function App() {
     setCurrentFile(prev => { if (prev?.id === id) { setNotes([]); return null; } return prev; });
   }, [loadFiles]);
 
-  const handleAddNote = useCallback(async (qt: string, tr?: string) => {
+  const handleAddNote = useCallback(async (qt: string, tr?: string, location?: { pageNumber: number; startOffset: number; endOffset: number }) => {
     const cf = currentFileRef.current; if (!cf) return;
-    const n: Note = { id: crypto.randomUUID(), fileId: cf.id, quoteText: qt, translation: tr || '', userNote: '', priority: 'normal', createdAt: Date.now() };
+    const n: Note = {
+      id: crypto.randomUUID(), fileId: cf.id, quoteText: qt,
+      translation: tr || '', userNote: '', priority: 'normal', createdAt: Date.now(),
+      location,
+    };
     await saveNote(n); await loadNotes(cf.id);
   }, [loadNotes]);
 
@@ -96,11 +100,13 @@ function App() {
     const cf = currentFileRef.current; if (cf) await loadNotes(cf.id);
   }, [loadNotes]);
 
-  // Optimistic vocab add — no full DB reload
+  const handleJumpToNote = useCallback((note: Note) => {
+    setHighlightTarget(note);
+  }, []);
+
   const handleAddVocabWord = useCallback(async (word: string, ex: string) => {
     const id = crypto.randomUUID();
     const now = Date.now();
-    // Insert optimistic entry immediately
     const optimistic: VocabWord = {
       id, word, meaning: '…', exampleSentence: ex, comment: '',
       sourceFileId: currentFileRef.current?.id || '',
@@ -120,10 +126,9 @@ function App() {
     }
   }, []);
 
-  // Optimistic vocab update — just update state, debounce DB save
   const handleUpdateVocabWord = useCallback((w: VocabWord) => {
     setVocabWords(prev => prev.map(v => v.id === w.id ? w : v));
-    saveVocabWord(w); // fire-and-forget
+    saveVocabWord(w);
   }, []);
 
   const handleDeleteVocabWord = useCallback(async (id: string) => {
@@ -136,7 +141,6 @@ function App() {
     await clearAllVocab(); setVocabWords([]);
   }, []);
 
-  // STABLE — this is the critical one, DocumentViewer depends on it
   const handleTranslate = useCallback(async (text: string): Promise<string> => {
     return translate(text, settingsRef.current);
   }, []);
@@ -181,9 +185,7 @@ function App() {
       const n = file.name.replace(/\.pdf$/i, '') + '.docx';
       const r: FileRecord = { id: crypto.randomUUID(), name: n, type: 'word', blob: b, createdAt: Date.now() };
       await saveFile(r); await loadFiles(); setCurrentFile(r); await loadNotes(r.id); setActiveTab('reading');
-    } catch (err) {
-      alert('转换失败: ' + (err instanceof Error ? err.message : String(err)));
-    }
+    } catch (err) { alert('转换失败: ' + (err instanceof Error ? err.message : String(err))); }
   }, [loadFiles, loadNotes]);
 
   return (
@@ -207,6 +209,8 @@ function App() {
               onAddVocab={handleAddVocabWord}
               onTranslate={handleTranslate}
               onTriggerTranslate={setTranslateTrigger}
+              notes={notes}
+              highlightTarget={highlightTarget}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center text-zinc-400 dark:text-zinc-600 bg-[#f8f8fa] dark:bg-[#0f1117]">
@@ -217,9 +221,7 @@ function App() {
               </div>
             </div>
           )}
-          {/* Right panel: vocab (top 3) + notes (bottom 7) */}
           <div className="w-[400px] border-l border-zinc-200 dark:border-zinc-800 flex flex-col shrink-0 bg-white dark:bg-zinc-950">
-            {/* Vocab section — 3/10 height */}
             <div className="flex flex-col border-b border-zinc-200 dark:border-zinc-800" style={{ height: '30%' }}>
               <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
                 <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
@@ -258,7 +260,6 @@ function App() {
                 )}
               </div>
             </div>
-            {/* Notes section — 7/10 height */}
             <div className="flex flex-col min-h-0" style={{ height: '70%' }}>
               <NotePanel
                 notes={notes}
@@ -267,6 +268,7 @@ function App() {
                 onDelete={handleDeleteNote}
                 onClear={handleClearNotes}
                 onExport={handleExportNotes}
+                onJumpToNote={handleJumpToNote}
               />
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { FileRecord } from '../types';
+import type { FileRecord, Note } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { MagnifyingGlassPlus, MagnifyingGlassMinus } from '@phosphor-icons/react';
@@ -9,12 +9,20 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+interface NoteLocation {
+  pageNumber: number;
+  startOffset: number;
+  endOffset: number;
+}
+
 interface DocumentViewerProps {
   file: FileRecord;
-  onAddNote: (quoteText: string, translation?: string) => void;
+  onAddNote: (quoteText: string, translation?: string, location?: NoteLocation) => void;
   onAddVocab: (word: string, exampleSentence: string) => void;
   onTranslate: (text: string) => Promise<string>;
   onTriggerTranslate: (trigger: { text: string } | null) => void;
+  notes: Note[];
+  highlightTarget: Note | null;
 }
 
 interface SelectionMenu {
@@ -22,6 +30,7 @@ interface SelectionMenu {
   x: number;
   y: number;
   text: string;
+  location?: NoteLocation;
 }
 
 interface PageTranslation {
@@ -60,11 +69,65 @@ function extractOrderedText(items: any[]): string {
     .join('\n');
 }
 
+function getSelectionLocation(selection: Selection, container: HTMLElement): NoteLocation | undefined {
+  if (!selection.rangeCount) return undefined;
+  const range = selection.getRangeAt(0);
+
+  // Find which page div the selection is in
+  let node = range.startContainer;
+  let pageDiv: HTMLElement | null = null;
+  while (node && node !== container) {
+    if ((node as HTMLElement).getAttribute?.('data-page-num')) {
+      pageDiv = node as HTMLElement;
+      break;
+    }
+    node = node.parentNode!;
+  }
+  if (!pageDiv) return undefined;
+
+  const pageNumber = Number(pageDiv.getAttribute('data-page-num'));
+  const textLayer = pageDiv.querySelector('.textLayer');
+  if (!textLayer) return undefined;
+
+  // Collect all spans in DOM order with cumulative offset
+  const spans = Array.from(textLayer.querySelectorAll('span'));
+  let offset = 0;
+  let startOffset = -1;
+  let endOffset = -1;
+
+  for (const span of spans) {
+    const textNode = span.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+      offset += (span.textContent?.length || 0);
+      continue;
+    }
+
+    if (startOffset === -1 && textLayer.contains(range.startContainer)) {
+      if (textNode === range.startContainer || span.contains(range.startContainer)) {
+        const nodeOffset = range.startContainer === textNode ? range.startOffset : 0;
+        startOffset = offset + nodeOffset;
+      }
+    }
+
+    if (textLayer.contains(range.endContainer)) {
+      if (textNode === range.endContainer || span.contains(range.endContainer)) {
+        const nodeOffset = range.endContainer === textNode ? range.endOffset : textNode.textContent?.length || 0;
+        endOffset = offset + nodeOffset;
+      }
+    }
+
+    offset += (textNode.textContent?.length || 0);
+  }
+
+  if (startOffset === -1 || endOffset === -1) return undefined;
+  return { pageNumber, startOffset: Math.min(startOffset, endOffset), endOffset: Math.max(startOffset, endOffset) };
+}
+
 const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3.0;
 
-export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, onTriggerTranslate }: DocumentViewerProps) {
+export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, onTriggerTranslate, notes, highlightTarget }: DocumentViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pdfTextsRef = useRef<{ [p: number]: string }>({});
@@ -79,6 +142,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
   const [currentPage, setCurrentPage] = useState(0);
   const [zoom, setZoom] = useState(1.0);
   const baseScaleRef = useRef(1);
+  const flashTimeoutRef = useRef<number | null>(null);
 
   // Save scroll position
   useEffect(() => {
@@ -109,6 +173,79 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     setWordContent('');
     setZoom(1.0);
   }, [file.id]);
+
+  // Render highlight marks on PDF
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || file.type !== 'pdf') return;
+
+    // Clear previous highlights
+    container.querySelectorAll('.note-highlight').forEach((el) => {
+      (el as HTMLElement).style.backgroundColor = '';
+      el.classList.remove('note-highlight', 'note-highlight-flash');
+    });
+
+    for (const note of notes) {
+      if (!note.location) continue;
+      const pageDiv = container.querySelector(`[data-page-num="${note.location.pageNumber}"]`);
+      if (!pageDiv) continue;
+      const textLayer = pageDiv.querySelector('.textLayer');
+      if (!textLayer) continue;
+
+      const spans = Array.from(textLayer.querySelectorAll('span'));
+      let offset = 0;
+      for (const span of spans) {
+        const textLen = span.textContent?.length || 0;
+        const spanStart = offset;
+        const spanEnd = offset + textLen;
+
+        if (spanEnd > note.location.startOffset && spanStart < note.location.endOffset) {
+          span.classList.add('note-highlight');
+          (span as HTMLElement).style.backgroundColor = 'rgba(20, 184, 166, 0.15)';
+        }
+        offset += textLen;
+      }
+    }
+  }, [notes, file.type, numPages, zoom]);
+
+  // Handle highlightTarget: scroll to position + flash
+  useEffect(() => {
+    if (!highlightTarget?.location) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const pageDiv = container.querySelector(`[data-page-num="${highlightTarget.location.pageNumber}"]`);
+    if (pageDiv) {
+      pageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // Flash highlight
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+
+    const textLayer = pageDiv?.querySelector('.textLayer');
+    if (!textLayer) return;
+
+    const spans = Array.from(textLayer.querySelectorAll('span.note-highlight'));
+    let offset = 0;
+    for (const span of spans) {
+      const textLen = span.textContent?.length || 0;
+      const spanStart = offset;
+      const spanEnd = offset + textLen;
+
+      if (spanEnd > highlightTarget.location.startOffset && spanStart < highlightTarget.location.endOffset) {
+        (span as HTMLElement).style.backgroundColor = 'rgba(20, 184, 166, 0.5)';
+        span.classList.add('note-highlight-flash');
+      }
+      offset += textLen;
+    }
+
+    flashTimeoutRef.current = window.setTimeout(() => {
+      textLayer.querySelectorAll('.note-highlight-flash').forEach((el) => {
+        (el as HTMLElement).style.backgroundColor = 'rgba(20, 184, 166, 0.15)';
+        el.classList.remove('note-highlight-flash');
+      });
+    }, 2000);
+  }, [highlightTarget]);
 
   // Render PDF
   useEffect(() => {
@@ -304,13 +441,15 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     const text = selection.toString().trim();
     if (!text) return;
     if (scrollRef.current && !scrollRef.current.contains(selection.anchorNode)) return;
+
+    const location = getSelectionLocation(selection, scrollRef.current!);
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
-    setMenu({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, text });
+    setMenu({ visible: true, x: rect.left + rect.width / 2, y: rect.top - 10, text, location });
   }, [menu.visible]);
 
   const handleQuoteToNote = () => {
-    onAddNote(menu.text);
+    onAddNote(menu.text, undefined, menu.location);
     setMenu({ visible: false, x: 0, y: 0, text: '' });
     window.getSelection()?.removeAllRanges();
   };

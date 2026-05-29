@@ -14,6 +14,11 @@ export interface Note {
   userNote: string;
   priority: 'important' | 'normal';
   createdAt: number;
+  location?: {
+    pageNumber: number;
+    startOffset: number;
+    endOffset: number;
+  };
 }
 
 export interface VocabWord {
