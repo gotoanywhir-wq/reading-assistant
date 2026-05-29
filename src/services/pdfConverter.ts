@@ -39,7 +39,7 @@ export async function convertPdfToDocx(pdfBlob: Blob): Promise<Blob> {
     const arrayBuffer = await pdfBlob.arrayBuffer();
     pdf = await pdfjsLib.getDocument({
       data: arrayBuffer,
-      standardFontDataUrl: new URL('pdfjs-dist/standard_fonts/', import.meta.url).href,
+      standardFontDataUrl: new URL('standard_fonts/', document.baseURI).href,
     }).promise;
   } catch (e) {
     throw new Error('PDF加载失败: ' + (e instanceof Error ? e.message : String(e)));
