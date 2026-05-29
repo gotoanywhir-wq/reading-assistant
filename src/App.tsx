@@ -19,7 +19,7 @@ import NotePanel from './components/NotePanel';
 import VocabPanel from './components/VocabPanel';
 import SettingsPanel from './components/SettingsPanel';
 import ErrorBoundary from './components/ErrorBoundary';
-import { BookOpenText, BookBookmark } from '@phosphor-icons/react';
+import { BookOpenText, BookBookmark, X } from '@phosphor-icons/react';
 
 function App() {
   const [files, setFiles] = useState<FileRecord[]>([]);
@@ -270,6 +270,13 @@ function App() {
                 {vocabWords.slice().reverse().slice(0, 50).map((w) => (
                   <div key={w.id} className="px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 group bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
                     <div className="flex items-baseline gap-1.5">
+                      <button
+                        onClick={() => handleDeleteVocabWord(w.id)}
+                        className="shrink-0 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors duration-150 active:scale-90"
+                        title="删除单词"
+                      >
+                        <X size={12} />
+                      </button>
                       <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{w.word}</span>
                       {w.meaning && <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex-1 truncate">{w.meaning}</span>}
                     </div>

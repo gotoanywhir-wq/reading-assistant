@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { FileRecord, Note } from '../types';
+import type { FileRecord, Note, PageTranslationRecord } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 import 'pdfjs-dist/web/pdf_viewer.css';
-import { MagnifyingGlassPlus, MagnifyingGlassMinus } from '@phosphor-icons/react';
+import { MagnifyingGlassPlus, MagnifyingGlassMinus, Download } from '@phosphor-icons/react';
+import { exportPageTranslationsToWord } from '../services/exporter';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -21,6 +22,8 @@ interface DocumentViewerProps {
   onAddVocab: (word: string, exampleSentence: string) => void;
   onTranslate: (text: string) => Promise<string>;
   onTriggerTranslate: (trigger: { text: string } | null) => void;
+  onSavePageTranslation: (fileId: string, pageNumber: number, text: string) => void;
+  savedPageTranslations: PageTranslationRecord[];
   notes: Note[];
   highlightTarget: Note | null;
 }
@@ -37,24 +40,27 @@ interface PageTranslation {
   [page: number]: string;
 }
 
-function extractOrderedText(items: any[]): string {
-  const filtered = items
-    .filter((item) => item.str && item.str.trim())
-    .map((item) => ({
-      str: item.str,
-      x: item.transform[4],
-      y: item.transform[5],
-      height: Math.abs(item.transform[0]) || item.height || 10,
-    }));
-  if (filtered.length === 0) return '';
-  const lines: { y: number; items: typeof filtered }[] = [];
-  for (const item of filtered) {
-    const existing = lines.find((l) => Math.abs(l.y - item.y) < 3);
+interface TextItem {
+  str: string;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+}
+
+function groupIntoLines(items: TextItem[]): { y: number; items: TextItem[] }[] {
+  const lines: { y: number; items: TextItem[] }[] = [];
+  for (const item of items) {
+    const existing = lines.find((l) => Math.abs(l.y - item.y) < item.height * 0.5);
     if (existing) existing.items.push(item);
     else lines.push({ y: item.y, items: [item] });
   }
   lines.sort((a, b) => b.y - a.y);
   for (const line of lines) line.items.sort((a, b) => a.x - b.x);
+  return lines;
+}
+
+function linesToText(lines: { y: number; items: TextItem[] }[]): string {
   return lines
     .map((line) => {
       let text = '';
@@ -62,11 +68,99 @@ function extractOrderedText(items: any[]): string {
       for (const item of line.items) {
         if (prevEnd > -Infinity && item.x - prevEnd > item.height * 0.3) text += ' ';
         text += item.str;
-        prevEnd = item.x + item.str.length * item.height * 0.5;
+        prevEnd = item.x + item.width;
       }
       return text;
     })
     .join('\n');
+}
+
+function mergeParagraphs(raw: string): string {
+  const lines = raw.split('\n');
+  const result: string[] = [];
+  let buf = '';
+
+  const isListItem = (s: string) => /^\s*[-–—•▪▸▶►◆○●■□◎]\s/.test(s) || /^\s*\d+[\.\)]\s/.test(s);
+  const isHeadingLike = (s: string) => {
+    const t = s.trim();
+    return t.length > 0 && t.length < 60 && t === t.toUpperCase() && /[A-Z]/.test(t);
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed === '') {
+      if (buf) { result.push(buf); buf = ''; }
+      continue;
+    }
+
+    if (isListItem(line) || isHeadingLike(line)) {
+      if (buf) { result.push(buf); buf = ''; }
+      result.push(trimmed);
+      continue;
+    }
+
+    if (buf === '') {
+      buf = trimmed;
+    } else {
+      buf += ' ' + trimmed;
+    }
+  }
+
+  if (buf) result.push(buf);
+  return result.join('\n');
+}
+
+function extractOrderedText(items: any[]): string {
+  const filtered: TextItem[] = items
+    .filter((item) => item.str && item.str.trim())
+    .map((item) => ({
+      str: item.str,
+      x: item.transform[4],
+      y: item.transform[5],
+      height: Math.abs(item.transform[0]) || item.height || 10,
+      width: item.width || item.str.length * (Math.abs(item.transform[0]) || item.height || 10) * 0.5,
+    }));
+  if (filtered.length === 0) return '';
+
+  const minX = Math.min(...filtered.map((i) => i.x));
+  const maxX = Math.max(...filtered.map((i) => i.x + i.width));
+  const pageWidth = maxX - minX;
+  if (pageWidth <= 0) return linesToText(groupIntoLines(filtered));
+
+  // Detect column structure: look at where each line starts
+  const allLines = groupIntoLines(filtered);
+  const lineStarts = allLines.map((l) => Math.min(...l.items.map((i) => i.x))).sort((a, b) => a - b);
+
+  // Find the largest gap between line-start X positions
+  let maxGap = 0;
+  let gapLeft = 0;
+  let gapRight = 0;
+  for (let i = 1; i < lineStarts.length; i++) {
+    const gap = lineStarts[i] - lineStarts[i - 1];
+    if (gap > maxGap) {
+      maxGap = gap;
+      gapLeft = lineStarts[i - 1];
+      gapRight = lineStarts[i];
+    }
+  }
+
+  const gapCenter = (gapLeft + gapRight) / 2;
+  const isTwoColumn =
+    maxGap > pageWidth * 0.08 &&
+    gapCenter > minX + pageWidth * 0.25 &&
+    gapCenter < minX + pageWidth * 0.75;
+
+  if (!isTwoColumn) {
+    return mergeParagraphs(linesToText(allLines));
+  }
+
+  // Two-column: left column first (top-to-bottom), then right column
+  const leftItems = filtered.filter((i) => i.x + i.width * 0.5 < gapCenter);
+  const rightItems = filtered.filter((i) => i.x + i.width * 0.5 >= gapCenter);
+  const leftText = mergeParagraphs(linesToText(groupIntoLines(leftItems)));
+  const rightText = mergeParagraphs(linesToText(groupIntoLines(rightItems)));
+  return leftText + '\n\n' + rightText;
 }
 
 function getSelectionLocation(selection: Selection, container: HTMLElement): NoteLocation | undefined {
@@ -127,10 +221,11 @@ const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3.0;
 
-export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, onTriggerTranslate, notes, highlightTarget }: DocumentViewerProps) {
+export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, onTriggerTranslate, onSavePageTranslation, savedPageTranslations, notes, highlightTarget }: DocumentViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pdfTextsRef = useRef<{ [p: number]: string }>({});
+  const observersRef = useRef<MutationObserver[]>([]);
   const scrollPosKey = `scroll-${file.id}`;
 
   const [menu, setMenu] = useState<SelectionMenu>({ visible: false, x: 0, y: 0, text: '' });
@@ -139,6 +234,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
   const [numPages, setNumPages] = useState(0);
   const [wordContent, setWordContent] = useState('');
   const [translatingAll, setTranslatingAll] = useState(false);
+  const [translationsVisible, setTranslationsVisible] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [zoom, setZoom] = useState(1.0);
   const baseScaleRef = useRef(1);
@@ -166,13 +262,23 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
 
   useEffect(() => {
     setMenu({ visible: false, x: 0, y: 0, text: '' });
-    setPageTranslations({});
     pdfTextsRef.current = {};
     setNumPages(0);
     setCurrentPage(0);
     setWordContent('');
     setZoom(1.0);
+    setTranslationsVisible(true);
   }, [file.id]);
+
+  // Initialize page translations from saved DB records when they load
+  useEffect(() => {
+    if (savedPageTranslations.length === 0) return;
+    const map: PageTranslation = {};
+    for (const r of savedPageTranslations) {
+      map[r.pageNumber] = r.text;
+    }
+    setPageTranslations(map);
+  }, [savedPageTranslations]);
 
   // Render highlight marks on PDF
   useEffect(() => {
@@ -253,6 +359,9 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
 
     const container = containerRef.current;
     container.innerHTML = '';
+    // Clean up previous mutation observers
+    observersRef.current.forEach(o => o.disconnect());
+    observersRef.current = [];
     let cancelled = false;
 
     (async () => {
@@ -314,7 +423,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
         innerBox.appendChild(canvas);
 
         const textLayerDiv = document.createElement('div');
-        textLayerDiv.className = 'textLayer';
+        textLayerDiv.className = 'textLayer notranslate';
         textLayerDiv.setAttribute('translate', 'no');
         textLayerDiv.style.setProperty('--total-scale-factor', `${pdfScale}`);
         const textContent = await page.getTextContent();
@@ -325,6 +434,42 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
           viewport,
         });
         await textLayer.render();
+
+        // Protect against browser/extension translation modifying TextLayer spans
+        textLayerDiv.querySelectorAll('span').forEach(span => {
+          if (span.textContent) {
+            span.setAttribute('data-original-text', span.textContent);
+          }
+          span.setAttribute('translate', 'no');
+          span.classList.add('notranslate');
+        });
+
+        const obs = new MutationObserver((mutations, obs) => {
+          obs.disconnect();
+          let needsRestore = false;
+          for (const m of mutations) {
+            if (m.type === 'characterData' && (m.target.parentElement as HTMLElement)?.hasAttribute?.('data-original-text')) {
+              needsRestore = true;
+              break;
+            }
+            if (m.type === 'childList') {
+              for (const node of Array.from(m.addedNodes)) {
+                if (node instanceof Element) { needsRestore = true; break; }
+              }
+            }
+            if (needsRestore) break;
+          }
+          if (needsRestore) {
+            textLayerDiv.querySelectorAll('span[data-original-text]').forEach(span => {
+              const orig = span.getAttribute('data-original-text');
+              if (orig !== null && span.textContent !== orig) span.textContent = orig;
+            });
+          }
+          obs.observe(textLayerDiv, { childList: true, subtree: true, characterData: true });
+        });
+        obs.observe(textLayerDiv, { childList: true, subtree: true, characterData: true });
+        observersRef.current.push(obs);
+
         innerBox.appendChild(textLayerDiv);
 
         // Button bar
@@ -343,7 +488,10 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
           if (!t || !t.trim()) { alert('该页没有可翻译的文本'); return; }
           setTranslatingPage(pn);
           onTranslate(t)
-            .then((tr) => setPageTranslations((pt) => ({ ...pt, [pn]: tr })))
+            .then((tr) => {
+              setPageTranslations((pt) => ({ ...pt, [pn]: tr }));
+              onSavePageTranslation(file.id, pn, tr);
+            })
             .catch((e) => alert('翻译失败: ' + (e instanceof Error ? e.message : '未知错误')))
             .finally(() => setTranslatingPage(null));
         };
@@ -362,7 +510,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; observersRef.current.forEach(o => o.disconnect()); observersRef.current = []; };
   }, [file, onTranslate, zoom]);
 
   // Render Word
@@ -377,7 +525,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     return () => { cancelled = true; };
   }, [file]);
 
-  // Sync translation blocks
+  // Sync translation blocks — editable contentEditable divs
   useEffect(() => {
     const container = containerRef.current;
     if (!container || numPages === 0) return;
@@ -385,14 +533,29 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       const block = container.querySelector(`.page-translation-block[data-page="${i}"]`) as HTMLElement;
       if (!block) continue;
       const t = pageTranslations[i];
-      if (t) {
+      if (t !== undefined && translationsVisible) {
+        block.style.display = 'block';
         block.style.cssText = `display: block; margin: 0 10px 10px 10px; padding: 12px; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; font-size: 13px; line-height: 1.7; color: #374151;`;
-        block.innerHTML = `<div style="font-size:10px;color:#60a5fa;font-weight:600;margin-bottom:4px;">页面翻译</div>${t}`;
+        const label = block.querySelector('.pt-label') as HTMLElement | null;
+        const body = block.querySelector('.pt-body') as HTMLElement | null;
+        if (!label || !body) {
+          block.innerHTML = `<div class="pt-label" style="font-size:10px;color:#60a5fa;font-weight:600;margin-bottom:4px;">页面翻译（可编辑）</div><div class="pt-body" contentEditable="true" style="outline:none;white-space:pre-wrap;">${t}</div>`;
+          const newBody = block.querySelector('.pt-body')!;
+          newBody.addEventListener('blur', () => {
+            const newText = (newBody as HTMLElement).innerText;
+            if (newText !== pageTranslations[i]) {
+              onSavePageTranslation(file.id, i, newText);
+              setPageTranslations((pt) => ({ ...pt, [i]: newText }));
+            }
+          });
+        } else if (body.innerText !== t) {
+          body.innerText = t;
+        }
       } else {
         block.style.display = 'none';
       }
     }
-  }, [pageTranslations, numPages]);
+  }, [pageTranslations, numPages, onSavePageTranslation, file.id, translationsVisible]);
 
   // Sync button states
   useEffect(() => {
@@ -424,6 +587,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       try {
         const t = await onTranslate(text);
         setPageTranslations((pt) => ({ ...pt, [i]: t }));
+        onSavePageTranslation(file.id, i, t);
       } catch (err) {
         alert(`第 ${i} 页翻译失败: ` + (err instanceof Error ? err.message : '未知错误'));
         break;
@@ -431,7 +595,20 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     }
     setTranslatingPage(null);
     setTranslatingAll(false);
-  }, [numPages, pageTranslations, onTranslate]);
+  }, [numPages, pageTranslations, onTranslate, onSavePageTranslation, file.id]);
+
+  const handleExportTranslation = useCallback(async () => {
+    const entries = Object.entries(pageTranslations).sort(([a], [b]) => Number(a) - Number(b));
+    if (entries.length === 0) { alert('没有可导出的翻译'); return; }
+    const records: PageTranslationRecord[] = entries.map(([pn, text]) => ({
+      id: `${file.id}-${pn}`,
+      fileId: file.id,
+      pageNumber: Number(pn),
+      text,
+      updatedAt: Date.now(),
+    }));
+    await exportPageTranslationsToWord(records, file.name.replace(/\.pdf$/i, ''));
+  }, [pageTranslations, file.id, file.name]);
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection();
@@ -480,12 +657,21 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
             {translatingAll ? `翻译第 ${translatingPage} 页...` : '翻译全文'}
           </button>
           {Object.keys(pageTranslations).length > 0 && (
-            <button
-              onClick={() => setPageTranslations({})}
-              className="px-2.5 py-1 text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-500 rounded transition-colors"
-            >
-              隐藏翻译
-            </button>
+            <>
+              <button
+                onClick={handleExportTranslation}
+                className="px-2.5 py-1 text-[10px] bg-teal-600 hover:bg-teal-500 text-white rounded transition-colors flex items-center gap-1"
+              >
+                <Download size={10} weight="bold" />
+                导出全文翻译
+              </button>
+              <button
+                onClick={() => setTranslationsVisible(v => !v)}
+                className="px-2.5 py-1 text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-500 rounded transition-colors"
+              >
+                {translationsVisible ? '隐藏翻译' : '显示翻译'}
+              </button>
+            </>
           )}
           <div className="ml-auto flex items-center gap-1">
             <button onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="p-1 text-gray-500 hover:text-teal-600 disabled:text-gray-300 disabled:cursor-default transition-colors active:scale-[0.93]" title="缩小">
@@ -530,7 +716,6 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
         ref={containerRef}
         className="p-6 min-h-full text-center"
         style={{ display: file.type === 'pdf' ? 'block' : 'none' }}
-        translate="no"
       />
 
       {/* Selection menu */}
