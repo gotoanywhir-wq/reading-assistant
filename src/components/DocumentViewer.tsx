@@ -26,8 +26,6 @@ interface PageTranslation {
   [page: number]: string;
 }
 
-const PDF_SCALE = 1.5;
-
 function extractOrderedText(items: any[]): string {
   const filtered = items
     .filter((item) => item.str && item.str.trim())
@@ -122,47 +120,53 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       if (cancelled) return;
       setNumPages(pdf.numPages);
 
+      // Calculate scale to fit container width
+      const firstPage = await pdf.getPage(1);
+      const baseViewport = firstPage.getViewport({ scale: 1 });
+      const scrollEl = container.closest('.overflow-y-auto') as HTMLElement;
+      const availableWidth = scrollEl
+        ? scrollEl.clientWidth - 48
+        : window.innerWidth - 48;
+      const pdfScale = Math.min(availableWidth / baseViewport.width, 2.0);
+      const outputScale = window.devicePixelRatio || 1;
+
       const texts: { [p: number]: string } = {};
 
       for (let i = 1; i <= pdf.numPages; i++) {
         if (cancelled) return;
 
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: PDF_SCALE });
+        const viewport = page.getViewport({ scale: pdfScale });
 
         const pageDiv = document.createElement('div');
         pageDiv.setAttribute('data-page-num', String(i));
         pageDiv.style.cssText = `
           margin: 0 auto 24px auto; background: white;
           border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-          overflow: hidden; max-width: 100%;
+          overflow: hidden;
+          width: ${viewport.width}px;
         `;
 
         const innerBox = document.createElement('div');
         innerBox.style.cssText = `
           position: relative;
           width: ${viewport.width}px; height: ${viewport.height}px;
-          transform-origin: top left;
         `;
         pageDiv.appendChild(innerBox);
 
         const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.style.cssText = 'display: block;';
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.cssText = `display: block; width: ${viewport.width}px; height: ${viewport.height}px;`;
         const ctx = canvas.getContext('2d')!;
+        ctx.scale(outputScale, outputScale);
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, viewport.width, viewport.height);
         await (page.render as any)({ canvasContext: ctx, viewport }).promise;
         innerBox.appendChild(canvas);
 
         const textLayerDiv = document.createElement('div');
         textLayerDiv.className = 'textLayer';
-        textLayerDiv.style.cssText = `
-          position: absolute; left: 0; top: 0;
-          width: ${viewport.width}px; height: ${viewport.height}px;
-          overflow: hidden; line-height: 1;
-        `;
         const textContent = await page.getTextContent();
         texts[i] = extractOrderedText(textContent.items);
         const textLayer = new pdfjsLib.TextLayer({
@@ -172,19 +176,6 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
         });
         await textLayer.render();
         innerBox.appendChild(textLayerDiv);
-
-        const scrollContainer = container.closest('.overflow-y-auto') as HTMLElement;
-        const availableWidth = scrollContainer
-          ? scrollContainer.clientWidth - 48
-          : window.innerWidth - 48;
-        const scaleFactor = Math.min(1, availableWidth / viewport.width);
-        if (scaleFactor < 1) {
-          innerBox.style.transform = `scale(${scaleFactor})`;
-          pageDiv.style.height = `${viewport.height * scaleFactor}px`;
-          pageDiv.style.width = `${viewport.width * scaleFactor}px`;
-        } else {
-          pageDiv.style.width = `${viewport.width}px`;
-        }
 
         // Button bar
         const btnBar = document.createElement('div');
