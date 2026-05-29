@@ -315,6 +315,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
 
         const textLayerDiv = document.createElement('div');
         textLayerDiv.className = 'textLayer';
+        textLayerDiv.setAttribute('translate', 'no');
         textLayerDiv.style.setProperty('--total-scale-factor', `${pdfScale}`);
         const textContent = await page.getTextContent();
         texts[i] = extractOrderedText(textContent.items);
@@ -529,6 +530,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
         ref={containerRef}
         className="p-6 min-h-full text-center"
         style={{ display: file.type === 'pdf' ? 'block' : 'none' }}
+        translate="no"
       />
 
       {/* Selection menu */}
