@@ -22,7 +22,7 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
   const normalCount = notes.filter((n) => n.priority === 'normal').length;
 
   return (
-    <div className="w-[300px] border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col shrink-0">
+    <div className="flex flex-col h-full">
       <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
         <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{fileName}</h2>
         {notes.length > 0 && (

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import type { FileRecord, VocabWord } from '../types';
-import { Plus, FilePdf, FileDoc, X, ArrowsLeftRight, BookBookmark, SidebarSimple } from '@phosphor-icons/react';
+import type { FileRecord } from '../types';
+import { Plus, FilePdf, FileDoc, X, ArrowsLeftRight, SidebarSimple } from '@phosphor-icons/react';
 
 interface FileListProps {
   files: FileRecord[];
@@ -9,13 +9,11 @@ interface FileListProps {
   onDelete: (id: string) => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onConvertPdf: (file: FileRecord) => void;
-  vocabWords: VocabWord[];
-  onVocabUpdate: (word: VocabWord) => void;
   open: boolean;
   onToggle: () => void;
 }
 
-export default function FileList({ files, currentFileId, onSelect, onDelete, onUpload, onConvertPdf, vocabWords, onVocabUpdate, open, onToggle }: FileListProps) {
+export default function FileList({ files, currentFileId, onSelect, onDelete, onUpload, onConvertPdf, open, onToggle }: FileListProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
 
@@ -43,7 +41,7 @@ export default function FileList({ files, currentFileId, onSelect, onDelete, onU
       {/* Drawer panel */}
       <div
         className={`h-full border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${
-          open ? 'w-[240px]' : 'w-0'
+          open ? 'w-[220px]' : 'w-0'
         }`}
       >
         {/* Upload button */}
@@ -100,43 +98,6 @@ export default function FileList({ files, currentFileId, onSelect, onDelete, onU
               )}
             </div>
           ))}
-        </div>
-
-        {/* Vocab section at bottom */}
-        <div className="border-t border-zinc-200 dark:border-zinc-800 flex flex-col min-h-0 max-h-[60vh]">
-          <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
-            <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
-              <BookBookmark size={13} weight="fill" />
-              单词本
-            </h3>
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">{vocabWords.length} 词</span>
-          </div>
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {vocabWords.length === 0 && (
-              <div className="flex flex-col items-center justify-center mt-4 px-3 text-zinc-400 dark:text-zinc-600">
-                <BookBookmark size={22} weight="thin" className="mb-1.5 opacity-50" />
-                <p className="text-[11px] text-center">暂无单词</p>
-              </div>
-            )}
-            {vocabWords.slice().reverse().slice(0, 30).map((w) => (
-              <div key={w.id} className="px-3 py-1.5 border-b border-zinc-50 dark:border-zinc-800/50 group">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{w.word}</span>
-                  {w.meaning && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{w.meaning}</span>}
-                </div>
-                <textarea
-                  value={w.comment}
-                  onChange={(e) => onVocabUpdate({ ...w, comment: e.target.value })}
-                  placeholder="添加备注..."
-                  className="w-full mt-1 bg-transparent text-[11px] text-zinc-600 dark:text-zinc-400 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-snug"
-                  rows={1}
-                />
-              </div>
-            ))}
-            {vocabWords.length > 30 && (
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-600 text-center py-1.5">显示最近 30 个，更多请前往单词本页面</p>
-            )}
-          </div>
         </div>
       </div>
     </>
