@@ -1,11 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
-
 function extractOrderedText(items: any[]): string[] {
   const filtered = items
     .filter((item) => item.str && item.str.trim())
@@ -39,18 +34,27 @@ function extractOrderedText(items: any[]): string[] {
 }
 
 export async function convertPdfToDocx(pdfBlob: Blob): Promise<Blob> {
-  const arrayBuffer = await pdfBlob.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let pdf;
+  try {
+    const arrayBuffer = await pdfBlob.arrayBuffer();
+    pdf = await pdfjsLib.getDocument({
+      data: arrayBuffer,
+      standardFontDataUrl: new URL('pdfjs-dist/standard_fonts/', import.meta.url).href,
+    }).promise;
+  } catch (e) {
+    throw new Error('PDF加载失败: ' + (e instanceof Error ? e.message : String(e)));
+  }
 
   const children: Paragraph[] = [];
+  let hasAnyText = false;
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-
     const lines = extractOrderedText(textContent.items);
 
-    // Page heading
+    if (lines.length > 0) hasAnyText = true;
+
     children.push(
       new Paragraph({
         text: `Page ${i}`,
@@ -59,7 +63,6 @@ export async function convertPdfToDocx(pdfBlob: Blob): Promise<Blob> {
       })
     );
 
-    // Text lines
     for (const line of lines) {
       children.push(
         new Paragraph({
@@ -70,9 +73,16 @@ export async function convertPdfToDocx(pdfBlob: Blob): Promise<Blob> {
     }
   }
 
-  const doc = new Document({
-    sections: [{ children }],
-  });
+  if (!hasAnyText) {
+    throw new Error('无法提取PDF文本。该PDF可能是扫描件或纯图片格式，请尝试使用OCR工具处理后再转换。');
+  }
 
-  return Packer.toBlob(doc);
+  try {
+    const doc = new Document({
+      sections: [{ children }],
+    });
+    return await Packer.toBlob(doc);
+  } catch (e) {
+    throw new Error('Word文档生成失败: ' + (e instanceof Error ? e.message : String(e)));
+  }
 }

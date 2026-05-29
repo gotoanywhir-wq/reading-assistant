@@ -181,7 +181,9 @@ function App() {
       const n = file.name.replace(/\.pdf$/i, '') + '.docx';
       const r: FileRecord = { id: crypto.randomUUID(), name: n, type: 'word', blob: b, createdAt: Date.now() };
       await saveFile(r); await loadFiles(); setCurrentFile(r); await loadNotes(r.id); setActiveTab('reading');
-    } catch (err) { alert('转换失败: ' + (err instanceof Error ? err.message : '未知错误')); }
+    } catch (err) {
+      alert('转换失败: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }, [loadFiles, loadNotes]);
 
   return (

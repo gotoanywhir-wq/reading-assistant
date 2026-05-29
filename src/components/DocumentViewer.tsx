@@ -121,7 +121,10 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     (async () => {
       const arrayBuffer = await file.blob.arrayBuffer();
       if (cancelled) return;
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjsLib.getDocument({
+        data: arrayBuffer,
+        standardFontDataUrl: new URL('pdfjs-dist/standard_fonts/', import.meta.url).href,
+      }).promise;
       if (cancelled) return;
       setNumPages(pdf.numPages);
 
