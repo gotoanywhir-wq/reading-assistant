@@ -33,6 +33,9 @@ function App() {
     const stored = localStorage.getItem('darkMode');
     return stored === 'true';
   });
+  const [fileListCollapsed, setFileListCollapsed] = useState(false);
+  const [notePanelCollapsed, setNotePanelCollapsed] = useState(false);
+  const [vocabPanelCollapsed, setVocabPanelCollapsed] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -270,8 +273,8 @@ function App() {
             onDelete={handleDeleteFile}
             onUpload={handleFileUpload}
             onConvertPdf={handleConvertPdf}
-            vocabWords={vocabWords}
-            onVocabUpdate={handleUpdateVocabWord}
+            collapsed={fileListCollapsed}
+            onToggleCollapse={() => setFileListCollapsed(c => !c)}
           />
           {currentFile ? (
             <DocumentViewer
@@ -290,6 +293,15 @@ function App() {
               </div>
             </div>
           )}
+          <VocabPanel
+            words={vocabWords}
+            onUpdate={handleUpdateVocabWord}
+            onDelete={handleDeleteVocabWord}
+            onClear={handleClearVocab}
+            onExport={handleExportVocab}
+            collapsed={vocabPanelCollapsed}
+            onToggleCollapse={() => setVocabPanelCollapsed(c => !c)}
+          />
           <NotePanel
             notes={notes}
             fileName={currentFile?.name || '读书笔记'}
@@ -297,6 +309,8 @@ function App() {
             onDelete={handleDeleteNote}
             onClear={handleClearNotes}
             onExport={handleExportNotes}
+            collapsed={notePanelCollapsed}
+            onToggleCollapse={() => setNotePanelCollapsed(c => !c)}
           />
         </div>
       )}
@@ -307,6 +321,8 @@ function App() {
           onDelete={handleDeleteVocabWord}
           onClear={handleClearVocab}
           onExport={handleExportVocab}
+          collapsed={false}
+          onToggleCollapse={() => {}}
         />
       )}
       {activeTab === 'settings' && (

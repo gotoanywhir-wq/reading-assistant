@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { FileRecord } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 import 'pdfjs-dist/web/pdf_viewer.css';
+import { MagnifyingGlassPlus, MagnifyingGlassMinus } from '@phosphor-icons/react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -59,6 +60,10 @@ function extractOrderedText(items: any[]): string {
     .join('\n');
 }
 
+const ZOOM_STEP = 0.25;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3.0;
+
 export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslate, onTriggerTranslate }: DocumentViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -72,27 +77,25 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
   const [wordContent, setWordContent] = useState('');
   const [translatingAll, setTranslatingAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [zoom, setZoom] = useState(1.0);
+  const baseScaleRef = useRef(1);
 
-  // Save scroll position on unmount / tab switch
+  // Save scroll position
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const saveScroll = () => {
-      sessionStorage.setItem(scrollPosKey, String(el.scrollTop));
-    };
+    const saveScroll = () => sessionStorage.setItem(scrollPosKey, String(el.scrollTop));
     el.addEventListener('scroll', saveScroll, { passive: true });
     return () => el.removeEventListener('scroll', saveScroll);
   }, [scrollPosKey]);
 
-  // Restore scroll position after content loads
+  // Restore scroll position
   useEffect(() => {
     const timer = setTimeout(() => {
       const el = scrollRef.current;
       if (!el) return;
       const saved = sessionStorage.getItem(scrollPosKey);
-      if (saved) {
-        el.scrollTop = Number(saved);
-      }
+      if (saved) el.scrollTop = Number(saved);
     }, 300);
     return () => clearTimeout(timer);
   }, [scrollPosKey, wordContent, currentPage]);
@@ -104,6 +107,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     setNumPages(0);
     setCurrentPage(0);
     setWordContent('');
+    setZoom(1.0);
   }, [file.id]);
 
   // Render PDF
@@ -121,14 +125,17 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       if (cancelled) return;
       setNumPages(pdf.numPages);
 
-      // Calculate scale to fit container width
+      // Calculate base scale to fit container width
       const firstPage = await pdf.getPage(1);
       const baseViewport = firstPage.getViewport({ scale: 1 });
       const scrollEl = container.closest('.overflow-y-auto') as HTMLElement;
       const availableWidth = scrollEl
         ? scrollEl.clientWidth - 48
         : window.innerWidth - 48;
-      const pdfScale = Math.min(availableWidth / baseViewport.width, 2.0);
+      const baseScale = Math.min(availableWidth / baseViewport.width, 2.0);
+      baseScaleRef.current = baseScale;
+
+      const pdfScale = baseScale * zoom;
       const outputScale = window.devicePixelRatio || 1;
 
       const texts: { [p: number]: string } = {};
@@ -181,11 +188,11 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
 
         // Button bar
         const btnBar = document.createElement('div');
-        btnBar.style.cssText = 'height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px;';
+        btnBar.style.cssText = 'height: 36px; display: flex; align-items: center; justify-content: center; gap: 8px;';
         const btn = document.createElement('button');
         btn.className = 'translate-page-btn';
         btn.setAttribute('data-page', String(i));
-        btn.style.cssText = `padding: 4px 12px; font-size: 12px; cursor: pointer; background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; border-radius: 4px; transition: background 0.15s;`;
+        btn.style.cssText = `padding: 3px 10px; font-size: 11px; cursor: pointer; background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; border-radius: 4px; transition: background 0.15s;`;
         btn.textContent = '翻译本页';
         btn.onmouseenter = () => { btn.style.background = '#dbeafe'; };
         btn.onmouseleave = () => { btn.style.background = '#eff6ff'; };
@@ -215,7 +222,7 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     })();
 
     return () => { cancelled = true; };
-  }, [file, onTranslate]);
+  }, [file, onTranslate, zoom]);
 
   // Render Word
   useEffect(() => {
@@ -238,8 +245,8 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
       if (!block) continue;
       const t = pageTranslations[i];
       if (t) {
-        block.style.cssText = `display: block; margin: 0 12px 12px 12px; padding: 16px; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 8px; font-size: 14px; line-height: 1.7; color: #374151;`;
-        block.innerHTML = `<div style="font-size:11px;color:#60a5fa;font-weight:600;margin-bottom:6px;">页面翻译</div>${t}`;
+        block.style.cssText = `display: block; margin: 0 10px 10px 10px; padding: 12px; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; font-size: 13px; line-height: 1.7; color: #374151;`;
+        block.innerHTML = `<div style="font-size:10px;color:#60a5fa;font-weight:600;margin-bottom:4px;">页面翻译</div>${t}`;
       } else {
         block.style.display = 'none';
       }
@@ -311,44 +318,63 @@ export default function DocumentViewer({ file, onAddNote, onAddVocab, onTranslat
     window.getSelection()?.removeAllRanges();
   };
 
+  const zoomIn = () => setZoom(z => Math.min(z + ZOOM_STEP, ZOOM_MAX));
+  const zoomOut = () => setZoom(z => Math.max(z - ZOOM_STEP, ZOOM_MIN));
+
   return (
     <div className="flex-1 overflow-y-auto relative bg-gray-50" ref={scrollRef} onMouseUp={handleMouseUp}>
       {/* Toolbar */}
       {file.type === 'pdf' && numPages > 0 && (
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 shadow-sm">
-          <span className="text-sm text-gray-600">
-            共 {numPages} 页 {currentPage < numPages ? `(已渲染 ${currentPage} 页...)` : ''}
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-1.5 flex items-center gap-3 shadow-sm">
+          <span className="text-xs text-gray-500">
+            {numPages} 页 {currentPage < numPages ? `(渲染 ${currentPage}...)` : ''}
           </span>
           <button
             onClick={handleTranslateAll}
             disabled={translatingAll}
-            className="px-3 py-1.5 text-xs bg-amber-500 hover:bg-amber-400 text-white rounded transition-colors disabled:opacity-50"
+            className="px-2.5 py-1 text-[10px] bg-amber-500 hover:bg-amber-400 text-white rounded transition-colors disabled:opacity-50"
           >
-            {translatingAll ? `正在翻译第 ${translatingPage} 页...` : '翻译全文'}
+            {translatingAll ? `翻译第 ${translatingPage} 页...` : '翻译全文'}
           </button>
           {Object.keys(pageTranslations).length > 0 && (
             <button
               onClick={() => setPageTranslations({})}
-              className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-500 rounded transition-colors"
+              className="px-2.5 py-1 text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-500 rounded transition-colors"
             >
               隐藏翻译
             </button>
           )}
-          {/* Mini vocab toggle removed — now in FileList */}
+          <div className="ml-auto flex items-center gap-1">
+            <button onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="p-1 text-gray-500 hover:text-teal-600 disabled:text-gray-300 disabled:cursor-default transition-colors active:scale-[0.93]" title="缩小">
+              <MagnifyingGlassMinus size={16} weight="bold" />
+            </button>
+            <span className="text-[11px] text-gray-500 w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+            <button onClick={zoomIn} disabled={zoom >= ZOOM_MAX} className="p-1 text-gray-500 hover:text-teal-600 disabled:text-gray-300 disabled:cursor-default transition-colors active:scale-[0.93]" title="放大">
+              <MagnifyingGlassPlus size={16} weight="bold" />
+            </button>
+          </div>
         </div>
       )}
 
       {/* Word toolbar */}
       {file.type === 'word' && (
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 shadow-sm">
-          <span className="text-sm text-gray-600">{file.name}</span>
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-1.5 flex items-center justify-between shadow-sm">
+          <span className="text-xs text-gray-500">{file.name}</span>
+          <div className="flex items-center gap-1">
+            <button onClick={zoomOut} disabled={zoom <= ZOOM_MIN} className="p-1 text-gray-500 hover:text-teal-600 disabled:text-gray-300 disabled:cursor-default transition-colors active:scale-[0.93]" title="缩小">
+              <MagnifyingGlassMinus size={16} weight="bold" />
+            </button>
+            <span className="text-[11px] text-gray-500 w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+            <button onClick={zoomIn} disabled={zoom >= ZOOM_MAX} className="p-1 text-gray-500 hover:text-teal-600 disabled:text-gray-300 disabled:cursor-default transition-colors active:scale-[0.93]" title="放大">
+              <MagnifyingGlassPlus size={16} weight="bold" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Main content */}
-      {/* Word */}
+      {/* Word content */}
       {file.type === 'word' && wordContent && (
-        <div className="p-6">
+        <div className="p-6" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
           <div
             className="prose max-w-none prose-p:text-gray-700 dark:prose-p:text-zinc-300 prose-h1:text-gray-900 dark:prose-h1:text-zinc-200 prose-h2:text-gray-900 dark:prose-h2:text-zinc-200 prose-h3:text-gray-800 dark:prose-h3:text-zinc-300 prose-strong:text-gray-800 dark:prose-strong:text-zinc-200 prose-em:text-gray-600 dark:prose-em:text-zinc-400 prose-li:text-gray-700 dark:prose-li:text-zinc-300 prose-a:text-blue-600 dark:prose-a:text-zinc-300"
             dangerouslySetInnerHTML={{ __html: wordContent }}
