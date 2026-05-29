@@ -1,6 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { FileRecord, Note, VocabWord, TranslationSettings } from './types';
-import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData } from './db';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord } from './types';
+
+const PROVIDER_LABELS: Record<string, string> = {
+  mymemory: 'MyMemory',
+  deepl: 'DeepL',
+  baidu: '百度翻译',
+  youdao: '有道翻译',
+};
+import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData, savePageTranslation, getPageTranslationsByFile, deletePageTranslationsByFile } from './db';
 import { translate } from './services/translator';
 import { exportNotesToWord, exportVocabToWord } from './services/exporter';
 import { convertPdfToDocx } from './services/pdfConverter';
@@ -11,7 +18,8 @@ import DocumentViewer from './components/DocumentViewer';
 import NotePanel from './components/NotePanel';
 import VocabPanel from './components/VocabPanel';
 import SettingsPanel from './components/SettingsPanel';
-import { BookOpenText } from '@phosphor-icons/react';
+import ErrorBoundary from './components/ErrorBoundary';
+import { BookOpenText, BookBookmark, X } from '@phosphor-icons/react';
 
 function App() {
   const [files, setFiles] = useState<FileRecord[]>([]);
@@ -29,240 +37,187 @@ function App() {
     youdaoAppSecret: '',
   });
   const [translateTrigger, setTranslateTrigger] = useState<{ text: string } | null>(null);
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const stored = localStorage.getItem('darkMode');
-    return stored === 'true';
-  });
+  const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('darkMode') === 'true');
+  const [fileListOpen, setFileListOpen] = useState(true);
+  const [highlightTarget, setHighlightTarget] = useState<Note | null>(null);
+  const [savedPageTranslations, setSavedPageTranslations] = useState<PageTranslationRecord[]>([]);
+
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const currentFileRef = useRef(currentFile);
+  currentFileRef.current = currentFile;
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     localStorage.setItem('darkMode', String(darkMode));
   }, [darkMode]);
 
-  const handleToggleDark = useCallback(() => {
-    setDarkMode(prev => !prev);
-  }, []);
+  const handleToggleDark = useCallback(() => setDarkMode(prev => !prev), []);
 
-  const loadFiles = useCallback(async () => {
-    const allFiles = await getFiles();
-    setFiles(allFiles);
+  const loadFiles = useCallback(async () => { setFiles(await getFiles()); }, []);
+  const loadNotes = useCallback(async (fid: string) => {
+    const n = await getNotesByFile(fid);
+    setNotes(n.sort((a, b) => a.createdAt - b.createdAt));
   }, []);
-
-  const loadNotes = useCallback(async (fileId: string) => {
-    const fileNotes = await getNotesByFile(fileId);
-    setNotes(fileNotes.sort((a, b) => a.createdAt - b.createdAt));
-  }, []);
-
   const loadVocab = useCallback(async () => {
-    const allWords = await getAllVocabWords();
-    setVocabWords(allWords.sort((a, b) => a.createdAt - b.createdAt));
+    const w = await getAllVocabWords();
+    setVocabWords(w.sort((a, b) => a.createdAt - b.createdAt));
   }, []);
+  const loadSettings = useCallback(async () => { setSettings(await getSettings()); }, []);
 
-  const loadSettings = useCallback(async () => {
-    const s = await getSettings();
-    setSettings(s);
-  }, []);
+  useEffect(() => { loadFiles(); loadVocab(); loadSettings(); }, [loadFiles, loadVocab, loadSettings]);
 
-  useEffect(() => {
-    loadFiles();
-    loadVocab();
-    loadSettings();
-  }, [loadFiles, loadVocab, loadSettings]);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const ext = file.name.split('.').pop()?.toLowerCase();
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const ext = f.name.split('.').pop()?.toLowerCase();
     const type: 'pdf' | 'word' = ext === 'pdf' ? 'pdf' : 'word';
-    if (ext !== 'pdf' && ext !== 'doc' && ext !== 'docx') {
-      alert('仅支持 PDF 和 Word (.doc/.docx) 文件');
-      return;
-    }
+    if (ext !== 'pdf' && ext !== 'doc' && ext !== 'docx') { alert('仅支持 PDF 和 Word 文件'); return; }
+    const rec: FileRecord = { id: crypto.randomUUID(), name: f.name, type, blob: f, createdAt: Date.now() };
+    await saveFile(rec); await loadFiles(); setCurrentFile(rec); await loadNotes(rec.id); setActiveTab('reading'); e.target.value = '';
+    setSavedPageTranslations([]);
+  }, [loadFiles, loadNotes]);
 
-    const record: FileRecord = {
-      id: crypto.randomUUID(),
-      name: file.name,
-      type,
-      blob: file,
-      createdAt: Date.now(),
+  const handleSelectFile = useCallback(async (f: FileRecord) => {
+    setCurrentFile(f); await loadNotes(f.id); setActiveTab('reading');
+    setSavedPageTranslations(await getPageTranslationsByFile(f.id));
+  }, [loadNotes]);
+
+  const handleDeleteFile = useCallback(async (id: string) => {
+    await deleteFile(id); await deletePageTranslationsByFile(id); await loadFiles();
+    setCurrentFile(prev => { if (prev?.id === id) { setNotes([]); setSavedPageTranslations([]); return null; } return prev; });
+  }, [loadFiles]);
+
+  const handleAddNote = useCallback(async (qt: string, tr?: string, location?: { pageNumber: number; startOffset: number; endOffset: number }) => {
+    const cf = currentFileRef.current; if (!cf) return;
+    const n: Note = {
+      id: crypto.randomUUID(), fileId: cf.id, quoteText: qt,
+      translation: tr || '', userNote: '', priority: 'normal', createdAt: Date.now(),
+      location,
     };
+    await saveNote(n); await loadNotes(cf.id);
+  }, [loadNotes]);
 
-    await saveFile(record);
-    await loadFiles();
-    setCurrentFile(record);
-    await loadNotes(record.id);
-    setActiveTab('reading');
-    e.target.value = '';
-  };
+  const handleUpdateNote = useCallback(async (n: Note) => {
+    await saveNote(n); await loadNotes(currentFileRef.current!.id);
+  }, [loadNotes]);
 
-  const handleSelectFile = async (file: FileRecord) => {
-    setCurrentFile(file);
-    await loadNotes(file.id);
-    setActiveTab('reading');
-  };
+  const handleDeleteNote = useCallback(async (id: string) => {
+    await deleteNote(id); await loadNotes(currentFileRef.current!.id);
+  }, [loadNotes]);
 
-  const handleDeleteFile = async (id: string) => {
-    await deleteFile(id);
-    await loadFiles();
-    if (currentFile?.id === id) {
-      setCurrentFile(null);
-      setNotes([]);
-    }
-  };
-
-  const handleAddNote = async (quoteText: string, translation?: string) => {
-    if (!currentFile) return;
-    const note: Note = {
-      id: crypto.randomUUID(),
-      fileId: currentFile.id,
-      quoteText,
-      translation: translation || '',
-      userNote: '',
-      priority: 'normal',
-      createdAt: Date.now(),
-    };
-    await saveNote(note);
-    await loadNotes(currentFile.id);
-  };
-
-  const handleUpdateNote = async (note: Note) => {
-    await saveNote(note);
-    await loadNotes(currentFile!.id);
-  };
-
-  const handleDeleteNote = async (id: string) => {
-    await deleteNote(id);
-    await loadNotes(currentFile!.id);
-  };
-
-  const handleClearNotes = async () => {
+  const handleClearNotes = useCallback(async () => {
     if (!confirm('确定要清除所有笔记吗？此操作不可撤销。')) return;
-    await clearAllNotes();
-    setNotes([]);
-    if (currentFile) await loadNotes(currentFile.id);
-  };
+    await clearAllNotes(); setNotes([]);
+    const cf = currentFileRef.current; if (cf) await loadNotes(cf.id);
+  }, [loadNotes]);
 
-  const handleAddVocabWord = async (word: string, exampleSentence: string) => {
-    let meaning = '';
+  const handleJumpToNote = useCallback((note: Note) => {
+    setHighlightTarget(note);
+  }, []);
+
+  const handleAddVocabWord = useCallback(async (word: string, ex: string) => {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    const optimistic: VocabWord = {
+      id, word, meaning: '…', exampleSentence: ex, comment: '',
+      sourceFileId: currentFileRef.current?.id || '',
+      sourceFileName: currentFileRef.current?.name || '',
+      createdAt: now,
+    };
+    setVocabWords(prev => [...prev, optimistic]);
     try {
-      meaning = await translate(word, settings);
+      const m = await translate(word, settingsRef.current);
+      const saved: VocabWord = { ...optimistic, meaning: m || '' };
+      await saveVocabWord(saved);
+      setVocabWords(prev => prev.map(w => w.id === id ? saved : w));
     } catch {
-      meaning = '';
+      const saved: VocabWord = { ...optimistic, meaning: '' };
+      await saveVocabWord(saved);
+      setVocabWords(prev => prev.map(w => w.id === id ? saved : w));
     }
-    const item: VocabWord = {
-      id: crypto.randomUUID(),
-      word,
-      meaning,
-      exampleSentence,
-      comment: '',
-      sourceFileId: currentFile?.id || '',
-      sourceFileName: currentFile?.name || '',
-      createdAt: Date.now(),
-    };
-    await saveVocabWord(item);
-    await loadVocab();
-  };
+  }, []);
 
-  const handleUpdateVocabWord = async (word: VocabWord) => {
-    await saveVocabWord(word);
-    await loadVocab();
-  };
+  const handleUpdateVocabWord = useCallback((w: VocabWord) => {
+    setVocabWords(prev => prev.map(v => v.id === w.id ? w : v));
+    saveVocabWord(w);
+  }, []);
 
-  const handleDeleteVocabWord = async (id: string) => {
+  const handleDeleteVocabWord = useCallback(async (id: string) => {
+    setVocabWords(prev => prev.filter(w => w.id !== id));
     await deleteVocabWord(id);
-    await loadVocab();
-  };
+  }, []);
 
-  const handleClearVocab = async () => {
+  const handleClearVocab = useCallback(async () => {
     if (!confirm('确定要清除所有单词吗？此操作不可撤销。')) return;
-    await clearAllVocab();
-    setVocabWords([]);
-  };
+    await clearAllVocab(); setVocabWords([]);
+  }, []);
 
-  const handleTranslate = async (text: string): Promise<string> => {
-    return translate(text, settings);
-  };
-
-  const handleExportNotes = async (scope: 'all' | 'important' | 'normal') => {
-    const filtered = scope === 'all' ? notes : notes.filter((n) => n.priority === scope);
-    if (filtered.length === 0) {
-      alert('没有可导出的笔记');
-      return;
-    }
-    await exportNotesToWord(filtered, currentFile?.name || '读书笔记');
-  };
-
-  const handleExportVocab = async () => {
-    if (vocabWords.length === 0) {
-      alert('单词本为空，无内容可导出');
-      return;
-    }
-    await exportVocabToWord(vocabWords);
-  };
-
-  const handleSaveSettings = async (s: TranslationSettings) => {
-    await saveSettings(s);
-    setSettings(s);
-  };
-
-  const handleExportData = async () => {
-    const json = await exportAllData();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `小睿快读_备份_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportData = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const result = await importAllData(text);
-        await loadNotes(currentFile?.id || '');
-        await loadVocab();
-        await loadSettings();
-        alert(`导入成功：${result.notes} 条笔记，${result.vocab} 个单词`);
-      } catch (err) {
-        alert('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'));
-      }
+  const handleSavePageTranslation = useCallback(async (fileId: string, pageNumber: number, text: string) => {
+    const record: PageTranslationRecord = {
+      id: `${fileId}-${pageNumber}`,
+      fileId,
+      pageNumber,
+      text,
+      updatedAt: Date.now(),
     };
-    input.click();
-  };
+    await savePageTranslation(record);
+    setSavedPageTranslations(prev => {
+      const filtered = prev.filter(r => r.id !== record.id);
+      return [...filtered, record];
+    });
+  }, []);
 
-  const handleConvertPdf = async (file: FileRecord) => {
+  const handleTranslate = useCallback(async (text: string): Promise<string> => {
+    return translate(text, settingsRef.current);
+  }, []);
+
+  const handleExportNotes = useCallback(async (scope: 'all' | 'important' | 'normal') => {
+    const f = scope === 'all' ? notes : notes.filter(n => n.priority === scope);
+    if (!f.length) { alert('没有可导出的笔记'); return; }
+    await exportNotesToWord(f, currentFileRef.current?.name || '读书笔记');
+  }, [notes]);
+
+  const handleExportVocab = useCallback(async () => {
+    if (!vocabWords.length) { alert('单词本为空'); return; }
+    await exportVocabToWord(vocabWords);
+  }, [vocabWords]);
+
+  const handleSaveSettings = useCallback(async (s: TranslationSettings) => {
+    await saveSettings(s); setSettings(s);
+  }, []);
+
+  const handleExportData = useCallback(async () => {
+    const j = await exportAllData(); const b = new Blob([j], { type: 'application/json' });
+    const u = URL.createObjectURL(b); const a = document.createElement('a');
+    a.href = u; a.download = `小睿快读_备份_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); URL.revokeObjectURL(u);
+  }, []);
+
+  const handleImportData = useCallback(() => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = '.json';
+    i.onchange = async (e) => {
+      const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
+      try {
+        const t = await f.text(); const r = await importAllData(t);
+        await loadNotes(currentFileRef.current?.id || ''); await loadVocab(); await loadSettings();
+        alert(`导入成功：${r.notes} 条笔记，${r.vocab} 个单词`);
+      } catch (err) { alert('导入失败：' + (err instanceof Error ? err.message : '文件格式错误')); }
+    }; i.click();
+  }, [loadNotes, loadVocab, loadSettings]);
+
+  const handleConvertPdf = useCallback(async (file: FileRecord) => {
     try {
-      const docxBlob = await convertPdfToDocx(file.blob);
-      const newName = file.name.replace(/\.pdf$/i, '') + '.docx';
-      const record: FileRecord = {
-        id: crypto.randomUUID(),
-        name: newName,
-        type: 'word',
-        blob: docxBlob,
-        createdAt: Date.now(),
-      };
-      await saveFile(record);
-      await loadFiles();
-      setCurrentFile(record);
-      await loadNotes(record.id);
-      setActiveTab('reading');
-    } catch (err) {
-      alert('转换失败: ' + (err instanceof Error ? err.message : '未知错误'));
-    }
-  };
+      const b = await convertPdfToDocx(file.blob);
+      const n = file.name.replace(/\.pdf$/i, '') + '.docx';
+      const r: FileRecord = { id: crypto.randomUUID(), name: n, type: 'word', blob: b, createdAt: Date.now() };
+      await saveFile(r); await loadFiles(); setCurrentFile(r); await loadNotes(r.id); setActiveTab('reading');
+    } catch (err) { alert('转换失败: ' + (err instanceof Error ? err.message : String(err))); }
+  }, [loadFiles, loadNotes]);
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'reading' && (
-        <div className="flex h-[calc(100vh-52px)]">
+      <div className={activeTab === 'reading' ? '' : 'hidden'}>
+        <div className="flex h-[calc(100vh-52px)] relative">
           <FileList
             files={files}
             currentFileId={currentFile?.id || null}
@@ -270,17 +225,23 @@ function App() {
             onDelete={handleDeleteFile}
             onUpload={handleFileUpload}
             onConvertPdf={handleConvertPdf}
-            vocabWords={vocabWords}
-            onVocabUpdate={handleUpdateVocabWord}
+            open={fileListOpen}
+            onToggle={() => setFileListOpen(o => !o)}
           />
           {currentFile ? (
-            <DocumentViewer
-              file={currentFile}
-              onAddNote={handleAddNote}
-              onAddVocab={handleAddVocabWord}
-              onTranslate={handleTranslate}
-              onTriggerTranslate={setTranslateTrigger}
-            />
+            <ErrorBoundary>
+              <DocumentViewer
+                file={currentFile}
+                onAddNote={handleAddNote}
+                onAddVocab={handleAddVocabWord}
+                onTranslate={handleTranslate}
+                onTriggerTranslate={setTranslateTrigger}
+                onSavePageTranslation={handleSavePageTranslation}
+                savedPageTranslations={savedPageTranslations}
+                notes={notes}
+                highlightTarget={highlightTarget}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="flex-1 flex items-center justify-center text-zinc-400 dark:text-zinc-600 bg-[#f8f8fa] dark:bg-[#0f1117]">
               <div className="text-center">
@@ -290,16 +251,66 @@ function App() {
               </div>
             </div>
           )}
-          <NotePanel
-            notes={notes}
-            fileName={currentFile?.name || '读书笔记'}
-            onUpdate={handleUpdateNote}
-            onDelete={handleDeleteNote}
-            onClear={handleClearNotes}
-            onExport={handleExportNotes}
-          />
+          <div className="w-[400px] border-l border-zinc-200 dark:border-zinc-800 flex flex-col shrink-0 bg-white dark:bg-zinc-950">
+            <div className="flex flex-col border-b border-zinc-200 dark:border-zinc-800" style={{ height: '30%' }}>
+              <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
+                <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
+                  <BookBookmark size={13} weight="fill" />
+                  单词本
+                </h3>
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-600">{vocabWords.length} 词</span>
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0 bg-[#f8f8fa] dark:bg-[#0f1117]">
+                {vocabWords.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-600">
+                    <BookBookmark size={24} weight="thin" className="mb-1.5 opacity-40" />
+                    <p className="text-[10px]">暂无单词</p>
+                  </div>
+                )}
+                {vocabWords.slice().reverse().slice(0, 50).map((w) => (
+                  <div key={w.id} className="px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 group bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                    <div className="flex items-baseline gap-1.5">
+                      <button
+                        onClick={() => handleDeleteVocabWord(w.id)}
+                        className="shrink-0 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors duration-150 active:scale-90"
+                        title="删除单词"
+                      >
+                        <X size={12} />
+                      </button>
+                      <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{w.word}</span>
+                      {w.meaning && <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex-1 truncate">{w.meaning}</span>}
+                    </div>
+                    {w.exampleSentence && (
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 italic mt-0.5 truncate">"{w.exampleSentence}"</p>
+                    )}
+                    <textarea
+                      value={w.comment}
+                      onChange={(e) => handleUpdateVocabWord({ ...w, comment: e.target.value })}
+                      placeholder="备注..."
+                      className="w-full mt-0.5 bg-transparent text-[10px] text-zinc-600 dark:text-zinc-400 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-snug"
+                      rows={1}
+                    />
+                  </div>
+                ))}
+                {vocabWords.length > 50 && (
+                  <p className="text-[9px] text-zinc-400 text-center py-1.5">显示最近 50 个，更多请前往单词本页面</p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col min-h-0" style={{ height: '70%' }}>
+              <NotePanel
+                notes={notes}
+                fileName={currentFile?.name || '读书笔记'}
+                onUpdate={handleUpdateNote}
+                onDelete={handleDeleteNote}
+                onClear={handleClearNotes}
+                onExport={handleExportNotes}
+                onJumpToNote={handleJumpToNote}
+              />
+            </div>
+          </div>
         </div>
-      )}
+      </div>
       {activeTab === 'vocabulary' && (
         <VocabPanel
           words={vocabWords}
@@ -319,7 +330,7 @@ function App() {
           onToggleDark={handleToggleDark}
         />
       )}
-      <TranslationWidget onTranslate={handleTranslate} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />
+      <TranslationWidget onTranslate={handleTranslate} provider={PROVIDER_LABELS[settings.provider]} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />
     </Layout>
   );
 }

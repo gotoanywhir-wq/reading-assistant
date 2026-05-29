@@ -1,8 +1,8 @@
 import { openDB } from 'idb';
-import type { FileRecord, Note, VocabWord, TranslationSettings } from '../types';
+import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord } from '../types';
 
 const DB_NAME = 'reading-assistant';
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbPromise: Promise<any> | null = null;
@@ -23,6 +23,10 @@ function getDB() {
         }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('pageTranslations')) {
+          const ptStore = db.createObjectStore('pageTranslations', { keyPath: 'id' });
+          ptStore.createIndex('fileId', 'fileId');
         }
       },
     });
@@ -161,4 +165,31 @@ export async function importAllData(json: string): Promise<{ notes: number; voca
   }
   await tx.done;
   return { notes, vocab };
+}
+
+// Page Translations
+export async function savePageTranslation(record: PageTranslationRecord): Promise<void> {
+  const db = await getDB();
+  await db.put('pageTranslations', record);
+}
+
+export async function getPageTranslationsByFile(fileId: string): Promise<PageTranslationRecord[]> {
+  const db = await getDB();
+  const index = db.transaction('pageTranslations').store.index('fileId');
+  return index.getAll(fileId);
+}
+
+export async function deletePageTranslationsByFile(fileId: string): Promise<void> {
+  const db = await getDB();
+  const records = await getPageTranslationsByFile(fileId);
+  const tx = db.transaction('pageTranslations', 'readwrite');
+  for (const r of records) {
+    await tx.store.delete(r.id);
+  }
+  await tx.done;
+}
+
+export async function clearAllPageTranslations(): Promise<void> {
+  const db = await getDB();
+  await db.clear('pageTranslations');
 }

@@ -1,5 +1,5 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle } from 'docx';
-import type { Note, VocabWord } from '../types';
+import type { Note, VocabWord, PageTranslationRecord } from '../types';
 
 export async function exportNotesToWord(notes: Note[], fileName: string): Promise<void> {
   const sections: Paragraph[] = [];
@@ -162,6 +162,50 @@ export async function exportVocabToWord(words: VocabWord[]): Promise<void> {
   const a = document.createElement('a');
   a.href = url;
   a.download = '英文词汇积累本.docx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function exportPageTranslationsToWord(records: PageTranslationRecord[], fileName: string): Promise<void> {
+  const sections: Paragraph[] = [];
+
+  sections.push(
+    new Paragraph({
+      text: `${fileName} - 全文翻译`,
+      heading: HeadingLevel.HEADING_1,
+      spacing: { after: 300 },
+    })
+  );
+
+  for (const r of records) {
+    sections.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: `第 ${r.pageNumber} 页`, bold: true, color: '3B82F6', size: 22 }),
+        ],
+        spacing: { before: 300 },
+      })
+    );
+
+    for (const line of r.text.split('\n')) {
+      sections.push(
+        new Paragraph({
+          children: [new TextRun({ text: line, size: 22 })],
+          spacing: { after: 60 },
+        })
+      );
+    }
+  }
+
+  const doc = new Document({
+    sections: [{ children: sections }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${fileName}_全文翻译.docx`;
   a.click();
   URL.revokeObjectURL(url);
 }

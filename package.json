@@ -9,15 +9,18 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "postinstall": "node -e \"const fs=require(\"fs\");const p=require(\"path\");const s=p.join(\"node_modules\",\"pdfjs-dist\",\"standard_fonts\");const d=p.join(\"public\",\"standard_fonts\");if(fs.existsSync(s)){fs.cpSync(s,d,{recursive:true});}\""
   },
   "homepage": "https://gotoanywhir-wq.github.io/reading-assistant",
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@phosphor-icons/react": "^2.1.10",
     "@tailwindcss/vite": "^4.3.0",
     "@tiptap/extension-placeholder": "^3.23.6",
     "@tiptap/react": "^3.23.6",
     "@tiptap/starter-kit": "^3.23.6",
+    "blueimp-md5": "^2.19.0",
     "docx": "^9.7.0",
     "idb": "^8.0.3",
     "mammoth": "^1.12.0",
@@ -28,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/blueimp-md5": "^2.18.2",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

@@ -70,9 +70,7 @@ export default function VocabPanel({ words, onUpdate, onDelete, onClear, onExpor
                   )}
                 </div>
                 <button
-                  onClick={() => {
-                    if (confirm(`删除单词 "${w.word}"？`)) onDelete(w.id);
-                  }}
+                  onClick={() => { if (confirm(`删除单词 "${w.word}"？`)) onDelete(w.id); }}
                   className="text-zinc-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all duration-200 opacity-0 group-hover:opacity-100 text-xs shrink-0 mt-1 active:scale-[0.95]"
                 >
                   <Trash size={15} />

@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { Translate, X, DotsThree } from '@phosphor-icons/react';
+import { mergeParagraphs } from '../services/translator';
 
 interface TranslationWidgetProps {
   onTranslate: (text: string) => Promise<string>;
+  provider?: string;
   /** External trigger: set this to auto-open and translate */
   trigger?: { text: string } | null;
   onTriggerConsumed?: () => void;
 }
 
-export default function TranslationWidget({ onTranslate, trigger, onTriggerConsumed }: TranslationWidgetProps) {
+export default function TranslationWidget({ onTranslate, provider, trigger, onTriggerConsumed }: TranslationWidgetProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [result, setResult] = useState('');
@@ -20,12 +22,13 @@ export default function TranslationWidget({ onTranslate, trigger, onTriggerConsu
   // Handle external trigger
   useEffect(() => {
     if (trigger?.text) {
-      setInput(trigger.text);
+      const cleaned = mergeParagraphs(trigger.text);
+      setInput(cleaned);
       setOpen(true);
       setResult('');
       setLoading(true);
-      onTranslate(trigger.text)
-        .then((t) => setResult(t))
+      onTranslate(cleaned)
+        .then((t) => setResult(normalizeResult(t)))
         .catch((e) => setResult('翻译失败: ' + (e instanceof Error ? e.message : '未知错误')))
         .finally(() => setLoading(false));
       onTriggerConsumed?.();
@@ -39,13 +42,17 @@ export default function TranslationWidget({ onTranslate, trigger, onTriggerConsu
     setResult('');
     try {
       const t = await onTranslate(text);
-      setResult(t);
+      setResult(normalizeResult(t));
     } catch (err) {
       setResult('翻译失败: ' + (err instanceof Error ? err.message : '未知错误'));
     } finally {
       setLoading(false);
     }
   };
+
+function normalizeResult(text: string): string {
+  return text.replace(/\n{2,}/g, '\n').replace(/\n/g, ' ').trim();
+}
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -104,6 +111,7 @@ export default function TranslationWidget({ onTranslate, trigger, onTriggerConsu
         <div className="flex items-center gap-2">
           <DotsThree size={14} weight="bold" className="text-white/60" />
           <span className="text-xs font-medium text-white">翻译窗口</span>
+          {provider && <span className="text-[10px] text-white/50 font-normal">· {provider}</span>}
         </div>
         <button
           onClick={() => setOpen(false)}

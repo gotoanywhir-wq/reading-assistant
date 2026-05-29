@@ -9,11 +9,12 @@ interface NotePanelProps {
   onDelete: (id: string) => void;
   onClear: () => void;
   onExport: (scope: 'all' | 'important' | 'normal') => void;
+  onJumpToNote: (note: Note) => void;
 }
 
 type Filter = 'all' | 'important' | 'normal';
 
-export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear, onExport }: NotePanelProps) {
+export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear, onExport, onJumpToNote }: NotePanelProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -22,8 +23,8 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
   const normalCount = notes.filter((n) => n.priority === 'normal').length;
 
   return (
-    <div className="w-[340px] border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col shrink-0">
-      <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+    <div className="flex flex-col h-full">
+      <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
         <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-200 truncate">{fileName}</h2>
         {notes.length > 0 && (
           <div className="flex gap-1.5">
@@ -67,7 +68,7 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
       </div>
 
       {notes.length > 0 && (
-        <div className="flex gap-1 px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex gap-1 px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
           {([
             { id: 'all' as const, label: `全部 ${notes.length}` },
             { id: 'important' as const, label: `${importantCount}`, icon: <Star size={11} weight="fill" className="text-red-500" /> },
@@ -97,14 +98,14 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
           </div>
         )}
         {filtered.map((note) => (
-          <NoteCard key={note.id} note={note} onUpdate={onUpdate} onDelete={onDelete} />
+          <NoteCard key={note.id} note={note} onUpdate={onUpdate} onDelete={onDelete} onJump={() => onJumpToNote(note)} />
         ))}
       </div>
     </div>
   );
 }
 
-function NoteCard({ note, onUpdate, onDelete }: { note: Note; onUpdate: (note: Note) => void; onDelete: (id: string) => void }) {
+function NoteCard({ note, onUpdate, onDelete, onJump }: { note: Note; onUpdate: (note: Note) => void; onDelete: (id: string) => void; onJump: () => void }) {
   const [localNote, setLocalNote] = useState(note.userNote);
   const lastSavedRef = useRef(note.userNote);
 
@@ -129,61 +130,63 @@ function NoteCard({ note, onUpdate, onDelete }: { note: Note; onUpdate: (note: N
   const borderColor = note.priority === 'important' ? 'border-red-400' : 'border-teal-400';
 
   return (
-    <div className={`bg-zinc-50 dark:bg-zinc-900 rounded-lg border overflow-hidden group transition-all duration-200 ${
-      note.priority === 'important' ? 'border-red-200 dark:border-red-900/50' : 'border-zinc-100 dark:border-zinc-800'
-    }`}>
-      <div className={`px-3 pt-3 pb-1.5 border-l-2 ${borderColor}`}>
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">原文引用</p>
-        <p className="text-sm text-zinc-700 dark:text-zinc-300 italic leading-relaxed">{note.quoteText}</p>
-      </div>
+    <div
+      className={`bg-zinc-50 dark:bg-zinc-900 rounded-lg border overflow-hidden group transition-all duration-200 cursor-pointer ${
+        note.priority === 'important' ? 'border-red-200 dark:border-red-900/50' : 'border-zinc-100 dark:border-zinc-800'
+      }`}
+      onClick={onJump}
+    >
+      <div className="flex-1 min-w-0">
+          <div className={`px-3 pt-3 pb-1.5 border-l-2 ${borderColor}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">原文引用</p>
+              <button
+                onClick={(e) => { e.stopPropagation(); if (confirm('删除这条笔记？')) onDelete(note.id); }}
+                className="text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                title="删除笔记"
+              >
+                <Trash size={11} />
+              </button>
+            </div>
+            <p className="text-sm text-zinc-700 dark:text-zinc-300 italic leading-relaxed">{note.quoteText}</p>
+          </div>
 
-      {note.translation && (
-        <div className="px-3 py-1.5 border-l-2 border-amber-400">
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">翻译</p>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{note.translation}</p>
+          {note.translation && (
+            <div className="px-3 py-1.5 border-l-2 border-amber-400">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">翻译</p>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{note.translation}</p>
+            </div>
+          )}
+
+          <div className="px-3 py-2 border-l-2 border-emerald-400" onClick={(e) => e.stopPropagation()}>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">我的笔记</p>
+            <textarea
+              value={localNote}
+              onChange={(e) => setLocalNote(e.target.value)}
+              onBlur={saveIfChanged}
+              placeholder="写下你的思考..."
+              className="w-full bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-relaxed min-h-[40px]"
+              rows={2}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900/50">
+            <button
+              onClick={(e) => { e.stopPropagation(); togglePriority(); }}
+              className={`text-xs px-1.5 py-0.5 rounded transition-all duration-200 active:scale-[0.95] flex items-center gap-1 ${
+                note.priority === 'important'
+                  ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
+                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+              }`}
+            >
+              <Star size={11} weight="fill" />
+              {note.priority === 'important' ? '重点' : '非重点'}
+            </button>
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">
+              {new Date(note.createdAt).toLocaleString('zh-CN')}
+            </span>
+          </div>
         </div>
-      )}
-
-      <div className="px-3 py-2 border-l-2 border-emerald-400">
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">我的笔记</p>
-        <textarea
-          value={localNote}
-          onChange={(e) => setLocalNote(e.target.value)}
-          onBlur={saveIfChanged}
-          placeholder="写下你的思考..."
-          className="w-full bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-relaxed min-h-[40px]"
-          rows={2}
-        />
-      </div>
-
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900/50">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={togglePriority}
-            className={`text-xs px-1.5 py-0.5 rounded transition-all duration-200 active:scale-[0.95] flex items-center gap-1 ${
-              note.priority === 'important'
-                ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
-                : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-            }`}
-            title={note.priority === 'important' ? '标记为非重点' : '标记为重点'}
-          >
-            <Star size={11} weight="fill" />
-            {note.priority === 'important' ? '重点' : '非重点'}
-          </button>
-          <span className="text-[10px] text-zinc-400 dark:text-zinc-600">
-            {new Date(note.createdAt).toLocaleString('zh-CN')}
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            if (confirm('删除这条笔记？')) onDelete(note.id);
-          }}
-          className="text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-all duration-200 opacity-0 group-hover:opacity-100 flex items-center gap-0.5"
-        >
-          <Trash size={10} />
-          删除
-        </button>
-      </div>
     </div>
   );
 }

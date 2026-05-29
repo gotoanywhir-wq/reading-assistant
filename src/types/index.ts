@@ -14,6 +14,11 @@ export interface Note {
   userNote: string;
   priority: 'important' | 'normal';
   createdAt: number;
+  location?: {
+    pageNumber: number;
+    startOffset: number;
+    endOffset: number;
+  };
 }
 
 export interface VocabWord {
@@ -25,6 +30,14 @@ export interface VocabWord {
   sourceFileId: string;
   sourceFileName: string;
   createdAt: number;
+}
+
+export interface PageTranslationRecord {
+  id: string;        // `${fileId}-${pageNumber}`
+  fileId: string;
+  pageNumber: number;
+  text: string;
+  updatedAt: number;
 }
 
 export type TranslationProvider = 'mymemory' | 'deepl' | 'baidu' | 'youdao';

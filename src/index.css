@@ -43,41 +43,10 @@ body {
   background: rgba(20, 184, 166, 0.4);
 }
 
-/* PDF.js text layer — transparent text, visible selection */
-.textLayer {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  line-height: 1;
-  text-size-adjust: none;
-  -webkit-text-size-adjust: none;
-}
-
-.textLayer > span,
-.textLayer > br + span {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0% 0%;
-}
-
+/* PDF text layer selection color override */
 .textLayer ::selection {
   background: rgba(20, 184, 166, 0.35);
   color: transparent;
-}
-
-.textLayer br {
-  display: none;
-}
-
-/* Highlight layer for selected text */
-.textLayer .endOfContent {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  cursor: default;
-  user-select: none;
 }
 
 /* Page wrapper spacing */
