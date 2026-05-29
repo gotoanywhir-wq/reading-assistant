@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { FileRecord, Note, VocabWord, TranslationSettings } from './types';
-import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData } from './db';
+import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord } from './types';
+
+const PROVIDER_LABELS: Record<string, string> = {
+  mymemory: 'MyMemory',
+  deepl: 'DeepL',
+  baidu: '百度翻译',
+  youdao: '有道翻译',
+};
+import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData, savePageTranslation, getPageTranslationsByFile, deletePageTranslationsByFile } from './db';
 import { translate } from './services/translator';
 import { exportNotesToWord, exportVocabToWord } from './services/exporter';
 import { convertPdfToDocx } from './services/pdfConverter';
@@ -11,6 +18,7 @@ import DocumentViewer from './components/DocumentViewer';
 import NotePanel from './components/NotePanel';
 import VocabPanel from './components/VocabPanel';
 import SettingsPanel from './components/SettingsPanel';
+import ErrorBoundary from './components/ErrorBoundary';
 import { BookOpenText, BookBookmark } from '@phosphor-icons/react';
 
 function App() {
@@ -32,6 +40,7 @@ function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('darkMode') === 'true');
   const [fileListOpen, setFileListOpen] = useState(true);
   const [highlightTarget, setHighlightTarget] = useState<Note | null>(null);
+  const [savedPageTranslations, setSavedPageTranslations] = useState<PageTranslationRecord[]>([]);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -65,15 +74,17 @@ function App() {
     if (ext !== 'pdf' && ext !== 'doc' && ext !== 'docx') { alert('仅支持 PDF 和 Word 文件'); return; }
     const rec: FileRecord = { id: crypto.randomUUID(), name: f.name, type, blob: f, createdAt: Date.now() };
     await saveFile(rec); await loadFiles(); setCurrentFile(rec); await loadNotes(rec.id); setActiveTab('reading'); e.target.value = '';
+    setSavedPageTranslations([]);
   }, [loadFiles, loadNotes]);
 
   const handleSelectFile = useCallback(async (f: FileRecord) => {
     setCurrentFile(f); await loadNotes(f.id); setActiveTab('reading');
+    setSavedPageTranslations(await getPageTranslationsByFile(f.id));
   }, [loadNotes]);
 
   const handleDeleteFile = useCallback(async (id: string) => {
-    await deleteFile(id); await loadFiles();
-    setCurrentFile(prev => { if (prev?.id === id) { setNotes([]); return null; } return prev; });
+    await deleteFile(id); await deletePageTranslationsByFile(id); await loadFiles();
+    setCurrentFile(prev => { if (prev?.id === id) { setNotes([]); setSavedPageTranslations([]); return null; } return prev; });
   }, [loadFiles]);
 
   const handleAddNote = useCallback(async (qt: string, tr?: string, location?: { pageNumber: number; startOffset: number; endOffset: number }) => {
@@ -141,6 +152,21 @@ function App() {
     await clearAllVocab(); setVocabWords([]);
   }, []);
 
+  const handleSavePageTranslation = useCallback(async (fileId: string, pageNumber: number, text: string) => {
+    const record: PageTranslationRecord = {
+      id: `${fileId}-${pageNumber}`,
+      fileId,
+      pageNumber,
+      text,
+      updatedAt: Date.now(),
+    };
+    await savePageTranslation(record);
+    setSavedPageTranslations(prev => {
+      const filtered = prev.filter(r => r.id !== record.id);
+      return [...filtered, record];
+    });
+  }, []);
+
   const handleTranslate = useCallback(async (text: string): Promise<string> => {
     return translate(text, settingsRef.current);
   }, []);
@@ -190,7 +216,7 @@ function App() {
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'reading' && (
+      <div className={activeTab === 'reading' ? '' : 'hidden'}>
         <div className="flex h-[calc(100vh-52px)] relative">
           <FileList
             files={files}
@@ -203,15 +229,19 @@ function App() {
             onToggle={() => setFileListOpen(o => !o)}
           />
           {currentFile ? (
-            <DocumentViewer
-              file={currentFile}
-              onAddNote={handleAddNote}
-              onAddVocab={handleAddVocabWord}
-              onTranslate={handleTranslate}
-              onTriggerTranslate={setTranslateTrigger}
-              notes={notes}
-              highlightTarget={highlightTarget}
-            />
+            <ErrorBoundary>
+              <DocumentViewer
+                file={currentFile}
+                onAddNote={handleAddNote}
+                onAddVocab={handleAddVocabWord}
+                onTranslate={handleTranslate}
+                onTriggerTranslate={setTranslateTrigger}
+                onSavePageTranslation={handleSavePageTranslation}
+                savedPageTranslations={savedPageTranslations}
+                notes={notes}
+                highlightTarget={highlightTarget}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="flex-1 flex items-center justify-center text-zinc-400 dark:text-zinc-600 bg-[#f8f8fa] dark:bg-[#0f1117]">
               <div className="text-center">
@@ -273,7 +303,7 @@ function App() {
             </div>
           </div>
         </div>
-      )}
+      </div>
       {activeTab === 'vocabulary' && (
         <VocabPanel
           words={vocabWords}
@@ -293,7 +323,7 @@ function App() {
           onToggleDark={handleToggleDark}
         />
       )}
-      <TranslationWidget onTranslate={handleTranslate} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />
+      <TranslationWidget onTranslate={handleTranslate} provider={PROVIDER_LABELS[settings.provider]} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />
     </Layout>
   );
 }

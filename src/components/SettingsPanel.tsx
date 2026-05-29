@@ -58,7 +58,7 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
               {([
                 { id: 'mymemory' as const, label: '内置翻译 (MyMemory)', desc: '免费，无需配置，开箱即用，每日限额约1000词' },
                 { id: 'deepl' as const, label: 'DeepL', desc: '翻译质量最高，免费版每月50万字符' },
-                { id: 'baidu' as const, label: '百度翻译', desc: '国内访问稳定，标准版免费无限量' },
+                { id: 'baidu' as const, label: '百度翻译', desc: '国内访问稳定，免费版每月5万字符' },
                 { id: 'youdao' as const, label: '有道翻译', desc: '国内访问稳定，免费版每月1000次调用' },
               ]).map((opt) => (
                 <label
@@ -210,6 +210,7 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
                 <li>进入 "管理控制台" 创建应用</li>
                 <li>选择 "通用翻译API" → "标准版"（免费）</li>
                 <li>获取 App ID 和 Secret Key 填入上方</li>
+                <li>在应用详情页将「服务器IP」设为 <span className="text-teal-500 dark:text-teal-400 font-medium">0.0.0.0</span>（允许所有IP访问）</li>
               </ol>
             </div>
             <div>

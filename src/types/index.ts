@@ -32,6 +32,14 @@ export interface VocabWord {
   createdAt: number;
 }
 
+export interface PageTranslationRecord {
+  id: string;        // `${fileId}-${pageNumber}`
+  fileId: string;
+  pageNumber: number;
+  text: string;
+  updatedAt: number;
+}
+
 export type TranslationProvider = 'mymemory' | 'deepl' | 'baidu' | 'youdao';
 
 export interface TranslationSettings {
