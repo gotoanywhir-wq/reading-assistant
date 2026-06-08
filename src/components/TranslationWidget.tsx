@@ -23,13 +23,13 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
   const [pasteResult, setPasteResult] = useState('');
   const [position, setPosition] = useState({ x: window.innerWidth - 360, y: 80 });
   const [width, setWidth] = useState(BASE_W);
+  const [height, setHeight] = useState(BASE_H);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
-  const resizeStart = useRef({ x: 0, w: 0 });
+  const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
 
   const scale = width / BASE_W;
-  const displayH = Math.round(BASE_H * scale);
 
   const isYoudaoWeb = provider === 'youdao_web';
 
@@ -115,7 +115,7 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
   const onResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    resizeStart.current = { x: e.clientX, w: width };
+    resizeStart.current = { x: e.clientX, y: e.clientY, w: width, h: height };
     setResizing(true);
   };
 
@@ -140,7 +140,9 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
     if (!resizing) return;
     const onMove = (e: MouseEvent) => {
       const dw = e.clientX - resizeStart.current.x;
+      const dh = e.clientY - resizeStart.current.y;
       setWidth(Math.max(260, Math.min(720, resizeStart.current.w + dw)));
+      setHeight(Math.max(200, Math.min(window.innerHeight - 40, resizeStart.current.h + dh)));
     };
     const onUp = () => setResizing(false);
     window.addEventListener('mousemove', onMove);
@@ -170,9 +172,9 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
   return (
     <div
       className="trans-widget fixed z-50 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden"
-      style={{ left: position.x, top: position.y, width, height: displayH, ...(dragging || resizing ? { userSelect: 'none' as const } : {}) }}
+      style={{ left: position.x, top: position.y, width, height, ...(dragging || resizing ? { userSelect: 'none' as const } : {}) }}
     >
-      <div style={{ zoom: scale, width: BASE_W, height: BASE_H }} className="flex flex-col h-full">
+      <div style={{ zoom: scale, width: BASE_W }} className="flex flex-col h-full">
         {/* Header */}
         <div
           onMouseDown={onDragStart}
