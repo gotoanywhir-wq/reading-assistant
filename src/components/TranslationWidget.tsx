@@ -19,8 +19,11 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
   const [copied, setCopied] = useState<'source' | 'result' | null>(null);
   const [pasteResult, setPasteResult] = useState('');
   const [position, setPosition] = useState({ x: window.innerWidth - 360, y: 80 });
+  const [size, setSize] = useState({ w: 340, h: 420 });
   const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
 
   const isYoudaoWeb = provider === 'youdao_web';
 
@@ -104,11 +107,18 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
     setDragging(true);
   };
 
+  const onResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeStart.current = { x: e.clientX, y: e.clientY, w: size.w, h: size.h };
+    setResizing(true);
+  };
+
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
       setPosition({
-        x: Math.max(0, Math.min(window.innerWidth - 340, e.clientX - dragOffset.current.x)),
+        x: Math.max(0, Math.min(window.innerWidth - size.w, e.clientX - dragOffset.current.x)),
         y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - dragOffset.current.y)),
       });
     };
@@ -119,7 +129,26 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [dragging]);
+  }, [dragging, size.w]);
+
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (e: MouseEvent) => {
+      const dw = e.clientX - resizeStart.current.x;
+      const dh = e.clientY - resizeStart.current.y;
+      setSize({
+        w: Math.max(280, Math.min(600, resizeStart.current.w + dw)),
+        h: Math.max(200, Math.min(window.innerHeight - 40, resizeStart.current.h + dh)),
+      });
+    };
+    const onUp = () => setResizing(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [resizing]);
 
   const providerLabel = isYoudaoWeb ? '有道翻译' : '内置翻译';
 
@@ -137,8 +166,8 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
 
   return (
     <div
-      className="trans-widget fixed z-50 w-[340px] bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col"
-      style={{ left: position.x, top: position.y, ...(dragging ? { userSelect: 'none' as const } : {}) }}
+      className="trans-widget fixed z-50 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col"
+      style={{ left: position.x, top: position.y, width: size.w, height: size.h, ...(dragging || resizing ? { userSelect: 'none' as const } : {}) }}
     >
       {/* Header */}
       <div
@@ -281,6 +310,15 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
           )}
         </div>
       )}
+      {/* Resize handle */}
+      <div
+        onMouseDown={onResizeStart}
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize flex items-center justify-center z-10"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" className="text-zinc-300 dark:text-zinc-600">
+          <path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </div>
     </div>
   );
 }
