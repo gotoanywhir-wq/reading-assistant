@@ -40,16 +40,11 @@ export interface PageTranslationRecord {
   updatedAt: number;
 }
 
-export type TranslationProvider = 'mymemory' | 'deepl' | 'baidu' | 'youdao';
+export type TranslationProvider = 'mymemory' | 'youdao_web';
 
 export interface TranslationSettings {
   id: string;
   provider: TranslationProvider;
-  deeplApiKey: string;
-  baiduAppId: string;
-  baiduSecretKey: string;
-  youdaoAppId: string;
-  youdaoAppSecret: string;
 }
 
 export interface AppTab {

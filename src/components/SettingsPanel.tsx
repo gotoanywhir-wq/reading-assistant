@@ -24,7 +24,7 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
   return (
     <div className="h-[calc(100vh-52px)] overflow-y-auto bg-[#f8f8fa] dark:bg-[#0f1117]">
       <div className="max-w-xl mx-auto py-8 px-6">
-        <h2 className="text-xl font-semibold text-zinc-800 dark:text-zinc-100 mb-6">翻译设置</h2>
+        <h2 className="text-xl font-semibold text-zinc-800 dark:text-zinc-100 mb-6">设置</h2>
 
         <div className="space-y-6">
           {/* Dark mode toggle */}
@@ -56,10 +56,8 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
             <label className="block text-sm text-zinc-600 dark:text-zinc-400 mb-3">翻译服务</label>
             <div className="space-y-2">
               {([
-                { id: 'mymemory' as const, label: '内置翻译 (MyMemory)', desc: '免费，无需配置，开箱即用，每日限额约1000词' },
-                { id: 'deepl' as const, label: 'DeepL', desc: '翻译质量最高，免费版每月50万字符' },
-                { id: 'baidu' as const, label: '百度翻译', desc: '国内访问稳定，免费版每月5万字符' },
-                { id: 'youdao' as const, label: '有道翻译', desc: '国内访问稳定，免费版每月1000次调用' },
+                { id: 'mymemory' as const, label: '内置翻译 (MyMemory)', desc: '免费，无需配置，开箱即用，每日限额约5000词' },
+                { id: 'youdao_web' as const, label: '有道翻译 (网页版)', desc: '免费无限额，自动打开有道翻译网页并复制原文，翻译后粘贴结果即可' },
               ]).map((opt) => (
                 <label
                   key={opt.id}
@@ -86,78 +84,6 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
             </div>
           </div>
 
-          {form.provider === 'deepl' && (
-            <div>
-              <label className="block text-sm text-zinc-600 dark:text-zinc-400 mb-2">DeepL API Key</label>
-              <input
-                type="password"
-                value={form.deeplApiKey}
-                onChange={(e) => setForm({ ...form, deeplApiKey: e.target.value })}
-                placeholder="输入你的 DeepL API Key"
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
-              />
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5">
-                注册地址: <span className="text-teal-500 dark:text-teal-400">https://www.deepl.com/pro#developer</span>
-              </p>
-            </div>
-          )}
-
-          {form.provider === 'baidu' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-zinc-600 dark:text-zinc-400 mb-2">百度翻译 App ID</label>
-                <input
-                  type="text"
-                  value={form.baiduAppId}
-                  onChange={(e) => setForm({ ...form, baiduAppId: e.target.value })}
-                  placeholder="输入百度翻译 App ID"
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-zinc-600 dark:text-zinc-400 mb-2">百度翻译 Secret Key</label>
-                <input
-                  type="password"
-                  value={form.baiduSecretKey}
-                  onChange={(e) => setForm({ ...form, baiduSecretKey: e.target.value })}
-                  placeholder="输入百度翻译 Secret Key"
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
-                />
-              </div>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                注册地址: <span className="text-teal-500 dark:text-teal-400">https://fanyi-api.baidu.com/</span>
-              </p>
-            </div>
-          )}
-
-          {form.provider === 'youdao' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-zinc-600 dark:text-zinc-400 mb-2">有道翻译应用ID</label>
-                <input
-                  type="text"
-                  value={form.youdaoAppId}
-                  onChange={(e) => setForm({ ...form, youdaoAppId: e.target.value })}
-                  placeholder="输入有道翻译应用ID (App Key)"
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-zinc-600 dark:text-zinc-400 mb-2">有道翻译应用密钥</label>
-                <input
-                  type="password"
-                  value={form.youdaoAppSecret}
-                  onChange={(e) => setForm({ ...form, youdaoAppSecret: e.target.value })}
-                  placeholder="输入有道翻译应用密钥 (App Secret)"
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
-                />
-              </div>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                注册地址: <span className="text-teal-500 dark:text-teal-400">https://ai.youdao.com/</span>
-              </p>
-            </div>
-          )}
-
           <button
             onClick={handleSave}
             className="w-full py-2.5 bg-teal-600 hover:bg-teal-500 dark:bg-teal-700 dark:hover:bg-teal-600 text-white text-sm rounded-md transition-all duration-200 active:scale-[0.97] flex items-center justify-center gap-1.5"
@@ -170,7 +96,7 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
         <div className="mt-8">
           <h2 className="text-xl font-semibold text-zinc-800 dark:text-zinc-100 mb-4">数据管理</h2>
           <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 space-y-3">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">导出你的笔记、单词本和设置到 JSON 文件，可在其他设备导入恢复。文档文件需重新上传。</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">导出你的笔记、单词本到 JSON 文件，可在其他设备导入恢复。文档文件需重新上传。</p>
             <div className="flex gap-2">
               <button
                 onClick={onExport}
@@ -184,45 +110,6 @@ export default function SettingsPanel({ settings, onSave, onExport, onImport, da
               >
                 导入数据
               </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-10 p-4 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
-          <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">如何注册 API Key？</h3>
-          <div className="space-y-4 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            <div>
-              <p className="text-zinc-700 dark:text-zinc-300 font-medium mb-1">DeepL (推荐)</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>打开 https://www.deepl.com/pro#developer</li>
-                <li>点击 "免费试用 DeepL API"</li>
-                <li>注册账号并登录</li>
-                <li>在账户页面找到 "Authentication Key"</li>
-                <li>复制 Key 粘贴到上方输入框</li>
-                <li>免费版 Key 以 :fx 结尾，每月50万字符</li>
-              </ol>
-            </div>
-            <div>
-              <p className="text-zinc-700 dark:text-zinc-300 font-medium mb-1">百度翻译</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>打开 https://fanyi-api.baidu.com/</li>
-                <li>注册百度账号并登录</li>
-                <li>进入 "管理控制台" 创建应用</li>
-                <li>选择 "通用翻译API" → "标准版"（免费）</li>
-                <li>获取 App ID 和 Secret Key 填入上方</li>
-                <li>在应用详情页将「服务器IP」设为 <span className="text-teal-500 dark:text-teal-400 font-medium">0.0.0.0</span>（允许所有IP访问）</li>
-              </ol>
-            </div>
-            <div>
-              <p className="text-zinc-700 dark:text-zinc-300 font-medium mb-1">有道翻译</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>打开 https://ai.youdao.com/</li>
-                <li>注册有道智云账号并登录</li>
-                <li>进入 "控制台" → "应用管理" 创建应用</li>
-                <li>添加 "自然语言翻译服务"，选择 "文本翻译"</li>
-                <li>绑定应用后获取应用ID和应用密钥</li>
-                <li>免费版每月1000次调用</li>
-              </ol>
             </div>
           </div>
         </div>

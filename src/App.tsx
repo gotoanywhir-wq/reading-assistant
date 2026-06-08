@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord } from './types';
 
-const PROVIDER_LABELS: Record<string, string> = {
-  mymemory: 'MyMemory',
-  deepl: 'DeepL',
-  baidu: '百度翻译',
-  youdao: '有道翻译',
-};
 import { getFiles, saveFile, deleteFile, getNotesByFile, saveNote, deleteNote, clearAllNotes, getAllVocabWords, saveVocabWord, deleteVocabWord, clearAllVocab, getSettings, saveSettings, exportAllData, importAllData, savePageTranslation, getPageTranslationsByFile, deletePageTranslationsByFile } from './db';
 import { translate } from './services/translator';
 import { exportNotesToWord, exportVocabToWord } from './services/exporter';
@@ -30,17 +24,14 @@ function App() {
   const [settings, setSettings] = useState<TranslationSettings>({
     id: 'default',
     provider: 'mymemory',
-    deeplApiKey: '',
-    baiduAppId: '',
-    baiduSecretKey: '',
-    youdaoAppId: '',
-    youdaoAppSecret: '',
   });
   const [translateTrigger, setTranslateTrigger] = useState<{ text: string } | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('darkMode') === 'true');
   const [fileListOpen, setFileListOpen] = useState(true);
   const [highlightTarget, setHighlightTarget] = useState<Note | null>(null);
   const [savedPageTranslations, setSavedPageTranslations] = useState<PageTranslationRecord[]>([]);
+  const [sidebarEditingId, setSidebarEditingId] = useState<string | null>(null);
+  const [sidebarEditMeaning, setSidebarEditMeaning] = useState('');
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -126,7 +117,7 @@ function App() {
     };
     setVocabWords(prev => [...prev, optimistic]);
     try {
-      const m = await translate(word, settingsRef.current);
+      const m = await translate(word);
       const saved: VocabWord = { ...optimistic, meaning: m || '' };
       await saveVocabWord(saved);
       setVocabWords(prev => prev.map(w => w.id === id ? saved : w));
@@ -135,6 +126,19 @@ function App() {
       await saveVocabWord(saved);
       setVocabWords(prev => prev.map(w => w.id === id ? saved : w));
     }
+  }, []);
+
+  const handleAddVocabFromTranslate = useCallback(async (word: string, meaning: string) => {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    const entry: VocabWord = {
+      id, word, meaning, exampleSentence: '', comment: '',
+      sourceFileId: currentFileRef.current?.id || '',
+      sourceFileName: currentFileRef.current?.name || '',
+      createdAt: now,
+    };
+    await saveVocabWord(entry);
+    setVocabWords(prev => [...prev, entry]);
   }, []);
 
   const handleUpdateVocabWord = useCallback((w: VocabWord) => {
@@ -168,7 +172,10 @@ function App() {
   }, []);
 
   const handleTranslate = useCallback(async (text: string): Promise<string> => {
-    return translate(text, settingsRef.current);
+    if (settingsRef.current.provider === 'youdao_web') {
+      return '__youdao_web__';
+    }
+    return translate(text);
   }, []);
 
   const handleExportNotes = useCallback(async (scope: 'all' | 'important' | 'normal') => {
@@ -213,6 +220,8 @@ function App() {
       await saveFile(r); await loadFiles(); setCurrentFile(r); await loadNotes(r.id); setActiveTab('reading');
     } catch (err) { alert('转换失败: ' + (err instanceof Error ? err.message : String(err))); }
   }, [loadFiles, loadNotes]);
+
+  const providerLabel = settings.provider === 'youdao_web' ? '有道翻译' : '内置翻译';
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
@@ -269,27 +278,72 @@ function App() {
                 )}
                 {vocabWords.slice().reverse().slice(0, 50).map((w) => (
                   <div key={w.id} className="px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 group bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
-                    <div className="flex items-baseline gap-1.5">
-                      <button
-                        onClick={() => handleDeleteVocabWord(w.id)}
-                        className="shrink-0 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors duration-150 active:scale-90"
-                        title="删除单词"
-                      >
-                        <X size={12} />
-                      </button>
-                      <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{w.word}</span>
-                      {w.meaning && <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex-1 truncate">{w.meaning}</span>}
-                    </div>
-                    {w.exampleSentence && (
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 italic mt-0.5 truncate">"{w.exampleSentence}"</p>
+                    {sidebarEditingId === w.id ? (
+                      <div className="space-y-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <button
+                            onClick={() => handleDeleteVocabWord(w.id)}
+                            className="shrink-0 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors duration-150 active:scale-90"
+                            title="删除单词"
+                          >
+                            <X size={12} />
+                          </button>
+                          <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{w.word}</span>
+                        </div>
+                        <input
+                          value={sidebarEditMeaning}
+                          onChange={(e) => setSidebarEditMeaning(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleUpdateVocabWord({ ...w, meaning: sidebarEditMeaning });
+                              setSidebarEditingId(null);
+                            }
+                          }}
+                          placeholder="释义..."
+                          autoFocus
+                          className="w-full text-[11px] text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-1.5 py-0.5 outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <button
+                            onClick={() => handleDeleteVocabWord(w.id)}
+                            className="shrink-0 text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors duration-150 active:scale-90"
+                            title="删除单词"
+                          >
+                            <X size={12} />
+                          </button>
+                          <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{w.word}</span>
+                        </div>
+                        {w.meaning ? (
+                          <button
+                            onClick={() => { setSidebarEditingId(w.id); setSidebarEditMeaning(w.meaning); }}
+                            className="text-[11px] text-zinc-500 dark:text-zinc-400 text-left w-full truncate hover:text-teal-500 dark:hover:text-teal-400 transition-colors cursor-text"
+                          >
+                            {w.meaning}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { setSidebarEditingId(w.id); setSidebarEditMeaning(''); }}
+                            className="text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-teal-400 dark:hover:text-teal-500 transition-colors"
+                          >
+                            点击添加释义
+                          </button>
+                        )}
+                        {w.exampleSentence && (
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 italic mt-0.5 truncate">"{w.exampleSentence}"</p>
+                        )}
+                        <textarea
+                          value={w.comment}
+                          onChange={(e) => handleUpdateVocabWord({ ...w, comment: e.target.value })}
+                          placeholder="备注..."
+                          className="w-full mt-0.5 bg-transparent text-[10px] text-zinc-600 dark:text-zinc-400 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-snug"
+                          rows={1}
+                        />
+                      </div>
                     )}
-                    <textarea
-                      value={w.comment}
-                      onChange={(e) => handleUpdateVocabWord({ ...w, comment: e.target.value })}
-                      placeholder="备注..."
-                      className="w-full mt-0.5 bg-transparent text-[10px] text-zinc-600 dark:text-zinc-400 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-snug"
-                      rows={1}
-                    />
                   </div>
                 ))}
                 {vocabWords.length > 50 && (
@@ -330,7 +384,7 @@ function App() {
           onToggleDark={handleToggleDark}
         />
       )}
-      <TranslationWidget onTranslate={handleTranslate} provider={PROVIDER_LABELS[settings.provider]} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} />
+      <TranslationWidget onTranslate={handleTranslate} provider={providerLabel} trigger={translateTrigger} onTriggerConsumed={() => setTranslateTrigger(null)} onAddNote={handleAddNote} onAddVocab={handleAddVocabFromTranslate} />
     </Layout>
   );
 }

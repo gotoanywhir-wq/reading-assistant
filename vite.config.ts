@@ -12,16 +12,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/mymemory/, ''),
       },
-      '/api/youdao': {
-        target: 'https://openapi.youdao.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/youdao/, ''),
-      },
-      '/api/baidu': {
-        target: 'https://api.fanyi.baidu.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/baidu/, ''),
-      },
     },
   },
   optimizeDeps: {

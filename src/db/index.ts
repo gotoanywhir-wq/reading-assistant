@@ -2,7 +2,7 @@ import { openDB } from 'idb';
 import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord } from '../types';
 
 const DB_NAME = 'reading-assistant';
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbPromise: Promise<any> | null = null;
@@ -115,15 +115,10 @@ const SETTINGS_ID = 'default';
 export async function getSettings(): Promise<TranslationSettings> {
   const db = await getDB();
   const settings = await db.get('settings', SETTINGS_ID);
-  return settings || {
-    id: SETTINGS_ID,
-    provider: 'mymemory' as const,
-    deeplApiKey: '',
-    baiduAppId: '',
-    baiduSecretKey: '',
-    youdaoAppId: '',
-    youdaoAppSecret: '',
-  };
+  if (settings && settings.provider) {
+    return { id: SETTINGS_ID, provider: settings.provider };
+  }
+  return { id: SETTINGS_ID, provider: 'mymemory' as const };
 }
 
 export async function saveSettings(settings: TranslationSettings): Promise<void> {
@@ -131,13 +126,12 @@ export async function saveSettings(settings: TranslationSettings): Promise<void>
   await db.put('settings', settings);
 }
 
-// Export all data (notes, vocabulary, settings) as JSON
+// Export all data (notes, vocabulary) as JSON
 export async function exportAllData(): Promise<string> {
   const db = await getDB();
   const notes = await db.getAll('notes');
   const vocabulary = await db.getAll('vocabulary');
-  const settings = await db.get('settings', SETTINGS_ID);
-  return JSON.stringify({ notes, vocabulary, settings, version: 1 }, null, 2);
+  return JSON.stringify({ notes, vocabulary, version: 1 }, null, 2);
 }
 
 // Import data from JSON, merging with existing data
@@ -145,7 +139,7 @@ export async function importAllData(json: string): Promise<{ notes: number; voca
   const data = JSON.parse(json);
   if (!data.version) throw new Error('无效的备份文件');
   const db = await getDB();
-  const tx = db.transaction(['notes', 'vocabulary', 'settings'], 'readwrite');
+  const tx = db.transaction(['notes', 'vocabulary'], 'readwrite');
   let notes = 0;
   let vocab = 0;
   if (Array.isArray(data.notes)) {
@@ -159,9 +153,6 @@ export async function importAllData(json: string): Promise<{ notes: number; voca
       await tx.objectStore('vocabulary').put(word);
       vocab++;
     }
-  }
-  if (data.settings) {
-    await tx.objectStore('settings').put(data.settings);
   }
   await tx.done;
   return { notes, vocab };
