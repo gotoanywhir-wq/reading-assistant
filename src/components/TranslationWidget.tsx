@@ -32,15 +32,12 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
   const isYoudaoWeb = provider === 'youdao_web';
 
   const doCopy = async (text: string, type: 'source' | 'result') => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
       document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
     }
-    setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
+    setCopied(type); setTimeout(() => setCopied(null), 2000);
   };
 
   useEffect(() => {
@@ -129,7 +126,7 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
 
   return (
     <div
-      className="trans-widget fixed z-50 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden"
+      className="trans-widget group fixed z-50 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden"
       style={{ left: position.x, top: position.y, width, height, ...(dragging || resizing ? { userSelect: 'none' as const } : {}) }}
     >
       <div style={{ zoom: scale, width: BASE_W }} className="flex flex-col h-full">
@@ -209,26 +206,48 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
         )}
       </div>
 
-      {/* Resize handles — outside zoom, absolute to outer container */}
-      {/* Right edge — width only */}
+      {/* Resize handles */}
+      {/* Right edge */}
       <div
         onMouseDown={(e) => onResizeStart(e, 'w')}
-        className="absolute top-3 right-0 w-2 h-[calc(100%-40px)] cursor-e-resize z-10 hover:bg-teal-500/10 transition-colors"
-      />
-      {/* Bottom edge — height only */}
+        className="absolute top-0 right-0 w-3 h-full cursor-e-resize z-10
+          opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      >
+        <div className="absolute top-1/2 right-[3px] -translate-y-1/2 w-[3px] h-8 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+      </div>
+
+      {/* Bottom edge */}
       <div
         onMouseDown={(e) => onResizeStart(e, 'h')}
-        className="absolute bottom-0 left-3 h-2 w-[calc(100%-40px)] cursor-s-resize z-10 hover:bg-teal-500/10 transition-colors"
-      />
-      {/* Bottom-right corner — both */}
+        className="absolute bottom-0 left-0 h-3 w-full cursor-s-resize z-10
+          opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      >
+        <div className="absolute bottom-[3px] left-1/2 -translate-x-1/2 h-[3px] w-8 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+      </div>
+
+      {/* Bottom-right corner */}
       <div
         onMouseDown={(e) => onResizeStart(e, 'wh')}
-        className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-20 flex items-center justify-center"
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-20
+          opacity-0 group-hover:opacity-100 transition-opacity duration-200
+          flex items-center justify-center"
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" className="text-zinc-300 dark:text-zinc-600">
-          <path d="M11 1L1 11M11 5L5 11M11 9L9 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <svg width="14" height="14" viewBox="0 0 14 14" className="text-zinc-400 dark:text-zinc-500">
+          <circle cx="11" cy="3" r="1.2" fill="currentColor" />
+          <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="11" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="3" cy="11" r="1.2" fill="currentColor" />
+          <circle cx="7" cy="11" r="1.2" fill="currentColor" />
+          <circle cx="11" cy="11" r="1.2" fill="currentColor" />
         </svg>
       </div>
+
+      {/* Size indicator during resize */}
+      {resizing && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-2 py-0.5 rounded-md bg-zinc-800/80 dark:bg-zinc-200/80 text-[10px] text-white dark:text-zinc-800 font-mono pointer-events-none whitespace-nowrap">
+          {Math.round(width)} × {Math.round(height)}
+        </div>
+      )}
     </div>
   );
 }
