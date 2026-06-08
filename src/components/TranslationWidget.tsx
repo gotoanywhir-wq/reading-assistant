@@ -24,6 +24,7 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
   const [resizing, setResizing] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const isYoudaoWeb = provider === 'youdao_web';
 
@@ -164,15 +165,17 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
     );
   }
 
+  const showResult = result || loading;
+
   return (
     <div
       className="trans-widget fixed z-50 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col"
       style={{ left: position.x, top: position.y, width: size.w, height: size.h, ...(dragging || resizing ? { userSelect: 'none' as const } : {}) }}
     >
-      {/* Header */}
+      {/* Header — fixed height */}
       <div
         onMouseDown={onDragStart}
-        className="flex items-center justify-between px-3 py-2.5 bg-teal-600 dark:bg-teal-700 cursor-move select-none"
+        className="flex items-center justify-between px-3 py-2 bg-teal-600 dark:bg-teal-700 cursor-move select-none shrink-0"
       >
         <div className="flex items-center gap-2">
           <DotsThree size={14} weight="bold" className="text-white/60" />
@@ -187,30 +190,31 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
         </button>
       </div>
 
-      {/* Input */}
-      <div className="p-3 border-b border-zinc-100 dark:border-zinc-800">
+      {/* Input — flex to fill upper half when no result */}
+      <div className={`p-3 border-b border-zinc-100 dark:border-zinc-800 flex flex-col shrink-0 ${!showResult ? 'flex-1' : ''}`}>
         <textarea
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="输入英文，按 Enter 翻译"
-          className="w-full text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 resize-none outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors"
-          rows={3}
+          className={`w-full text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md px-3 py-2 resize-none outline-none focus:border-teal-400 dark:focus:border-teal-500 transition-colors ${!showResult ? 'flex-1' : ''}`}
+          style={!showResult ? { minHeight: 0 } : {}}
         />
         <button
           onClick={handleTranslate}
           disabled={loading || !input.trim()}
-          className="mt-2 w-full py-1.5 text-xs bg-teal-600 hover:bg-teal-500 dark:bg-teal-700 dark:hover:bg-teal-600 text-white rounded-md transition-all duration-200 active:scale-[0.97] disabled:opacity-40 flex items-center justify-center gap-1"
+          className="mt-2 w-full py-1.5 text-xs bg-teal-600 hover:bg-teal-500 dark:bg-teal-700 dark:hover:bg-teal-600 text-white rounded-md transition-all duration-200 active:scale-[0.97] disabled:opacity-40 flex items-center justify-center gap-1 shrink-0"
         >
           <Translate size={12} weight="bold" />
           {loading ? '翻译中...' : isYoudaoWeb ? '生成翻译指引' : '翻译'}
         </button>
       </div>
 
-      {/* Result */}
-      {(result || loading) && (
-        <div className="p-3 max-h-[280px] overflow-y-auto">
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-1">翻译结果</p>
+      {/* Result — flex to fill remaining space */}
+      {showResult && (
+        <div className="p-3 flex-1 overflow-y-auto min-h-0">
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-1 shrink-0">翻译结果</p>
 
           {loading ? (
             <div className="flex items-center gap-2 py-2">
@@ -279,7 +283,7 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
           ) : (
             <div className="space-y-2">
               <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">{result}</p>
-              <div className="flex items-center gap-1 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-1 pt-1 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
                 <button
                   onClick={() => doCopy(result, 'result')}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] text-zinc-500 dark:text-zinc-400 hover:text-teal-500 dark:hover:text-teal-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
@@ -310,13 +314,14 @@ export default function TranslationWidget({ onTranslate, provider, trigger, onTr
           )}
         </div>
       )}
+
       {/* Resize handle */}
       <div
         onMouseDown={onResizeStart}
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize flex items-center justify-center z-10"
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-10"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" className="text-zinc-300 dark:text-zinc-600">
-          <path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <svg width="12" height="12" viewBox="0 0 12 12" className="text-zinc-300 dark:text-zinc-600">
+          <path d="M11 1L1 11M11 5L5 11M11 9L9 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
       </div>
     </div>
