@@ -11,6 +11,7 @@ import FileList from './components/FileList';
 import DocumentViewer from './components/DocumentViewer';
 import NotePanel from './components/NotePanel';
 import VocabPanel from './components/VocabPanel';
+import NoteReadingPanel from './components/NoteReadingPanel';
 import SettingsPanel from './components/SettingsPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { BookOpenText, BookBookmark, X } from '@phosphor-icons/react';
@@ -20,7 +21,7 @@ function App() {
   const [currentFile, setCurrentFile] = useState<FileRecord | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [vocabWords, setVocabWords] = useState<VocabWord[]>([]);
-  const [activeTab, setActiveTab] = useState<'reading' | 'vocabulary' | 'settings'>('reading');
+  const [activeTab, setActiveTab] = useState<'reading' | 'notes' | 'vocabulary' | 'settings'>('reading');
   const [settings, setSettings] = useState<TranslationSettings>({
     id: 'default',
     provider: 'mymemory',
@@ -373,6 +374,9 @@ function App() {
           onClear={handleClearVocab}
           onExport={handleExportVocab}
         />
+      )}
+      {activeTab === 'notes' && (
+        <NoteReadingPanel />
       )}
       {activeTab === 'settings' && (
         <SettingsPanel

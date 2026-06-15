@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import type { Note } from '../types';
 import { Star, Trash, Download, BookBookmark } from '@phosphor-icons/react';
 
@@ -13,6 +13,7 @@ interface NotePanelProps {
 }
 
 type Filter = 'all' | 'important' | 'normal';
+type EditableField = 'quote' | 'translation' | 'userNote';
 
 export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear, onExport, onJumpToNote }: NotePanelProps) {
   const [filter, setFilter] = useState<Filter>('all');
@@ -105,22 +106,97 @@ export default function NotePanel({ notes, fileName, onUpdate, onDelete, onClear
   );
 }
 
+function EditableBlock({
+  field,
+  label,
+  value,
+  borderClass,
+  placeholder,
+  editingField,
+  editDraft,
+  hoveredField,
+  onStartEdit,
+  onEditChange,
+  onCommitEdit,
+  onCancelEdit,
+  onHoverField,
+}: {
+  field: EditableField;
+  label: string;
+  value: string;
+  borderClass: string;
+  placeholder?: string;
+  editingField: EditableField | null;
+  editDraft: string;
+  hoveredField: EditableField | null;
+  onStartEdit: (field: EditableField, value: string) => void;
+  onEditChange: (value: string) => void;
+  onCommitEdit: () => void;
+  onCancelEdit: () => void;
+  onHoverField: (field: EditableField | null) => void;
+}) {
+  const isEditing = editingField === field;
+  const isHovered = hoveredField === field;
+
+  if (isEditing) {
+    return (
+      <div className={`px-3 py-1.5 border-l-2 ${borderClass}`} onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">{label}</p>
+        <textarea
+          value={editDraft}
+          onChange={(e) => onEditChange(e.target.value)}
+          onBlur={onCommitEdit}
+          onKeyDown={(e) => { if (e.key === 'Escape') { onCancelEdit(); } if (e.key === 'Enter' && e.ctrlKey) { onCommitEdit(); } }}
+          placeholder={placeholder}
+          className="w-full bg-zinc-100 dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-relaxed rounded px-2 py-1 min-h-[40px]"
+          rows={3}
+          autoFocus
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`px-3 py-1.5 border-l-2 ${borderClass} cursor-text group/field relative transition-colors duration-150 ${
+        isHovered ? 'bg-zinc-100/60 dark:bg-zinc-800/40' : ''
+      }`}
+      onClick={(e) => { e.stopPropagation(); onStartEdit(field, value); }}
+      onMouseEnter={() => onHoverField(field)}
+      onMouseLeave={() => onHoverField(null)}
+    >
+      <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">{label}</p>
+      {value ? (
+        <p className={`text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed ${field === 'quote' ? 'italic' : ''}`}>{value}</p>
+      ) : (
+        <p className="text-sm text-zinc-300 dark:text-zinc-600 italic">{placeholder || '点击编辑...'}</p>
+      )}
+      {isHovered && (
+        <span className="absolute top-1 right-2 text-[10px] text-zinc-400 dark:text-zinc-500 pointer-events-none">✎ 点击编辑</span>
+      )}
+    </div>
+  );
+}
+
 function NoteCard({ note, onUpdate, onDelete, onJump }: { note: Note; onUpdate: (note: Note) => void; onDelete: (id: string) => void; onJump: () => void }) {
-  const [localNote, setLocalNote] = useState(note.userNote);
-  const lastSavedRef = useRef(note.userNote);
+  const [editingField, setEditingField] = useState<EditableField | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [hoveredField, setHoveredField] = useState<EditableField | null>(null);
 
-  useEffect(() => {
-    if (note.userNote !== lastSavedRef.current) {
-      setLocalNote(note.userNote);
-      lastSavedRef.current = note.userNote;
-    }
-  }, [note.userNote]);
+  const startEdit = (field: EditableField, value: string) => {
+    setEditingField(field);
+    setEditDraft(value);
+  };
 
-  const saveIfChanged = () => {
-    if (localNote !== lastSavedRef.current) {
-      lastSavedRef.current = localNote;
-      onUpdate({ ...note, userNote: localNote });
+  const commitEdit = () => {
+    if (editingField === 'quote' && editDraft !== note.quoteText) {
+      onUpdate({ ...note, quoteText: editDraft });
+    } else if (editingField === 'translation' && editDraft !== (note.translation || '')) {
+      onUpdate({ ...note, translation: editDraft });
+    } else if (editingField === 'userNote' && editDraft !== note.userNote) {
+      onUpdate({ ...note, userNote: editDraft });
     }
+    setEditingField(null);
   };
 
   const togglePriority = () => {
@@ -131,62 +207,85 @@ function NoteCard({ note, onUpdate, onDelete, onJump }: { note: Note; onUpdate: 
 
   return (
     <div
-      className={`bg-zinc-50 dark:bg-zinc-900 rounded-lg border overflow-hidden group transition-all duration-200 cursor-pointer ${
+      className={`bg-zinc-50 dark:bg-zinc-900 rounded-lg border overflow-hidden group transition-all duration-200 ${
         note.priority === 'important' ? 'border-red-200 dark:border-red-900/50' : 'border-zinc-100 dark:border-zinc-800'
       }`}
       onClick={onJump}
     >
-      <div className="flex-1 min-w-0">
-          <div className={`px-3 pt-3 pb-1.5 border-l-2 ${borderColor}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">原文引用</p>
-              <button
-                onClick={(e) => { e.stopPropagation(); if (confirm('删除这条笔记？')) onDelete(note.id); }}
-                className="text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                title="删除笔记"
-              >
-                <Trash size={11} />
-              </button>
-            </div>
-            <p className="text-sm text-zinc-700 dark:text-zinc-300 italic leading-relaxed">{note.quoteText}</p>
-          </div>
+      <div className="flex-1 min-w-0 relative">
+        <button
+          onClick={(e) => { e.stopPropagation(); if (confirm('删除这条笔记？')) onDelete(note.id); }}
+          className="absolute top-1.5 right-2 text-zinc-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+          title="删除笔记"
+        >
+          <Trash size={13} />
+        </button>
 
-          {note.translation && (
-            <div className="px-3 py-1.5 border-l-2 border-amber-400">
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">翻译</p>
-              <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{note.translation}</p>
-            </div>
-          )}
+        <EditableBlock
+          field="quote"
+          label="原文引用"
+          value={note.quoteText}
+          borderClass={borderColor}
+          placeholder="点击编辑原文..."
+          editingField={editingField}
+          editDraft={editDraft}
+          hoveredField={hoveredField}
+          onStartEdit={startEdit}
+          onEditChange={setEditDraft}
+          onCommitEdit={commitEdit}
+          onCancelEdit={() => setEditingField(null)}
+          onHoverField={setHoveredField}
+        />
 
-          <div className="px-3 py-2 border-l-2 border-emerald-400" onClick={(e) => e.stopPropagation()}>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1">我的笔记</p>
-            <textarea
-              value={localNote}
-              onChange={(e) => setLocalNote(e.target.value)}
-              onBlur={saveIfChanged}
-              placeholder="写下你的思考..."
-              className="w-full bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-300 dark:placeholder-zinc-600 resize-none outline-none leading-relaxed min-h-[40px]"
-              rows={2}
-            />
-          </div>
+        <EditableBlock
+          field="translation"
+          label="翻译"
+          value={note.translation || ''}
+          borderClass="border-amber-400"
+          placeholder="点击编辑翻译..."
+          editingField={editingField}
+          editDraft={editDraft}
+          hoveredField={hoveredField}
+          onStartEdit={startEdit}
+          onEditChange={setEditDraft}
+          onCommitEdit={commitEdit}
+          onCancelEdit={() => setEditingField(null)}
+          onHoverField={setHoveredField}
+        />
 
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900/50">
-            <button
-              onClick={(e) => { e.stopPropagation(); togglePriority(); }}
-              className={`text-xs px-1.5 py-0.5 rounded transition-all duration-200 active:scale-[0.95] flex items-center gap-1 ${
-                note.priority === 'important'
-                  ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400'
-                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-              }`}
-            >
-              <Star size={11} weight="fill" />
-              {note.priority === 'important' ? '重点' : '非重点'}
-            </button>
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">
-              {new Date(note.createdAt).toLocaleString('zh-CN')}
-            </span>
-          </div>
+        <EditableBlock
+          field="userNote"
+          label="我的笔记"
+          value={note.userNote}
+          borderClass="border-emerald-400"
+          placeholder="写下你的思考..."
+          editingField={editingField}
+          editDraft={editDraft}
+          hoveredField={hoveredField}
+          onStartEdit={startEdit}
+          onEditChange={setEditDraft}
+          onCommitEdit={commitEdit}
+          onCancelEdit={() => setEditingField(null)}
+          onHoverField={setHoveredField}
+        />
+
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900/50" onClick={(e) => e.stopPropagation()}>
+          <span
+            className={`cursor-pointer transition-all duration-200 active:scale-[0.85] inline-flex ${
+              note.priority === 'important'
+                ? 'text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300'
+                : 'text-zinc-300 dark:text-zinc-600 hover:text-red-400 dark:hover:text-red-500'
+            }`}
+            onClick={togglePriority}
+            title={note.priority === 'important' ? '取消重点' : '标记重点'}
+          >
+            <Star size={14} weight="fill" />
+          </span>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-600">
+            {new Date(note.createdAt).toLocaleString('zh-CN')}
+          </span>
         </div>
+      </div>
     </div>
   );
 }

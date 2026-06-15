@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { FileRecord } from '../types';
-import { Plus, FilePdf, FileDoc, X, ArrowsLeftRight, SidebarSimple } from '@phosphor-icons/react';
+import { Plus, FilePdf, FileDoc, X, ArrowsLeftRight, SidebarSimple, MagnifyingGlass } from '@phosphor-icons/react';
 
 interface FileListProps {
   files: FileRecord[];
@@ -16,6 +16,7 @@ interface FileListProps {
 export default function FileList({ files, currentFileId, onSelect, onDelete, onUpload, onConvertPdf, open, onToggle }: FileListProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const handleConvert = async (e: React.MouseEvent, file: FileRecord) => {
     e.stopPropagation();
@@ -56,6 +57,21 @@ export default function FileList({ files, currentFileId, onSelect, onDelete, onU
           <input ref={inputRef} type="file" accept=".pdf,.doc,.docx" onChange={onUpload} className="hidden" />
         </div>
 
+        {/* Search */}
+        {files.length > 3 && (
+          <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="relative">
+              <MagnifyingGlass size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="搜索文件..."
+                className="w-full pl-8 pr-2 py-1.5 text-[11px] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md outline-none focus:border-teal-400 dark:focus:border-teal-500 placeholder-zinc-400 dark:placeholder-zinc-500 transition-colors"
+              />
+     </div>
+          </div>
+        )}
+
         {/* File list */}
         <div className="flex-1 overflow-y-auto min-h-0">
           {files.length === 0 && (
@@ -64,7 +80,15 @@ export default function FileList({ files, currentFileId, onSelect, onDelete, onU
               <p className="text-xs text-center">暂无文件</p>
             </div>
           )}
-          {files.map((file) => (
+          {search && files.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).length === 0 && (
+            <div className="flex flex-col items-center justify-center mt-6 px-3 text-zinc-400 dark:text-zinc-600">
+              <MagnifyingGlass size={22} weight="thin" className="mb-2 opacity-40" />
+              <p className="text-[11px] text-center">未找到文件</p>
+            </div>
+          )}
+          {files
+            .filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()))
+            .map((file) => (
             <div
               key={file.id}
               onClick={() => onSelect(file)}

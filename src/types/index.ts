@@ -48,6 +48,6 @@ export interface TranslationSettings {
 }
 
 export interface AppTab {
-  id: 'reading' | 'vocabulary' | 'settings';
+  id: 'reading' | 'notes' | 'vocabulary' | 'settings';
   label: string;
 }
