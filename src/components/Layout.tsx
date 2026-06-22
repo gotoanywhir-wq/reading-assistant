@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
-import { BookBookmark, Book, Gear, Notebook } from '@phosphor-icons/react';
+import { BookBookmark, Book, Gear, Notebook, Books } from '@phosphor-icons/react';
 
 interface LayoutProps {
-  activeTab: 'reading' | 'notes' | 'vocabulary' | 'settings';
-  onTabChange: (tab: 'reading' | 'notes' | 'vocabulary' | 'settings') => void;
+  activeTab: 'reading' | 'notes' | 'vocabulary' | 'settings' | 'notebook';
+  onTabChange: (tab: 'reading' | 'notes' | 'vocabulary' | 'settings' | 'notebook') => void;
   children: ReactNode;
 }
 
@@ -11,6 +11,7 @@ export default function Layout({ activeTab, onTabChange, children }: LayoutProps
   const tabs = [
     { id: 'reading' as const, label: '阅读笔记', icon: BookBookmark },
     { id: 'notes' as const, label: '笔记阅读', icon: Notebook },
+    { id: 'notebook' as const, label: '笔记本', icon: Books },
     { id: 'vocabulary' as const, label: '单词本', icon: Book },
     { id: 'settings' as const, label: '设置', icon: Gear },
   ];

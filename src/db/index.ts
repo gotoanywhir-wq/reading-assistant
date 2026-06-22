@@ -1,8 +1,8 @@
 import { openDB } from 'idb';
-import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord } from '../types';
+import type { FileRecord, Note, VocabWord, TranslationSettings, PageTranslationRecord, NotebookFolder, NotebookEntry } from '../types';
 
 const DB_NAME = 'reading-assistant';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let dbPromise: Promise<any> | null = null;
@@ -27,6 +27,15 @@ function getDB() {
         if (!db.objectStoreNames.contains('pageTranslations')) {
           const ptStore = db.createObjectStore('pageTranslations', { keyPath: 'id' });
           ptStore.createIndex('fileId', 'fileId');
+        }
+        if (!db.objectStoreNames.contains('notebookFolders')) {
+          const folderStore = db.createObjectStore('notebookFolders', { keyPath: 'id' });
+          folderStore.createIndex('language', 'language');
+          folderStore.createIndex('parentId', 'parentId');
+        }
+        if (!db.objectStoreNames.contains('notebooks')) {
+          const nbStore = db.createObjectStore('notebooks', { keyPath: 'id' });
+          nbStore.createIndex('folderId', 'folderId');
         }
       },
     });
@@ -183,4 +192,54 @@ export async function deletePageTranslationsByFile(fileId: string): Promise<void
 export async function clearAllPageTranslations(): Promise<void> {
   const db = await getDB();
   await db.clear('pageTranslations');
+}
+
+// Notebook Folders
+export async function saveNotebookFolder(folder: NotebookFolder): Promise<void> {
+  const db = await getDB();
+  await db.put('notebookFolders', folder);
+}
+
+export async function getNotebookFolders(): Promise<NotebookFolder[]> {
+  const db = await getDB();
+  return db.getAll('notebookFolders');
+}
+
+export async function getNotebookFoldersByLanguage(language: 'zh' | 'en'): Promise<NotebookFolder[]> {
+  const db = await getDB();
+  const index = db.transaction('notebookFolders').store.index('language');
+  return index.getAll(language);
+}
+
+export async function deleteNotebookFolder(id: string): Promise<void> {
+  const db = await getDB();
+  const entries = await getNotebookEntriesByFolder(id);
+  const tx = db.transaction(['notebookFolders', 'notebooks'], 'readwrite');
+  await tx.objectStore('notebookFolders').delete(id);
+  for (const e of entries) {
+    await tx.objectStore('notebooks').delete(e.id);
+  }
+  await tx.done;
+}
+
+// Notebooks
+export async function saveNotebookEntry(entry: NotebookEntry): Promise<void> {
+  const db = await getDB();
+  await db.put('notebooks', entry);
+}
+
+export async function getNotebookEntriesByFolder(folderId: string): Promise<NotebookEntry[]> {
+  const db = await getDB();
+  const index = db.transaction('notebooks').store.index('folderId');
+  return index.getAll(folderId);
+}
+
+export async function deleteNotebookEntry(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('notebooks', id);
+}
+
+export async function getAllNotebookEntries(): Promise<NotebookEntry[]> {
+  const db = await getDB();
+  return db.getAll('notebooks');
 }

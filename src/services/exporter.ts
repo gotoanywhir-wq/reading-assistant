@@ -1,5 +1,5 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, BorderStyle } from 'docx';
-import type { Note, VocabWord, PageTranslationRecord } from '../types';
+import type { Note, VocabWord, PageTranslationRecord, NotebookEntry } from '../types';
 
 export async function exportNotesToWord(notes: Note[], fileName: string): Promise<void> {
   const sections: Paragraph[] = [];
@@ -208,4 +208,80 @@ export async function exportPageTranslationsToWord(records: PageTranslationRecor
   a.download = `${fileName}_全文翻译.docx`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export async function exportNotebookEntriesToWord(entries: NotebookEntry[], folderName: string): Promise<void> {
+  const sections: Paragraph[] = [];
+
+  sections.push(
+    new Paragraph({
+      text: `${folderName} - 笔记本`,
+      heading: HeadingLevel.HEADING_1,
+      spacing: { after: 300 },
+    })
+  );
+
+  for (const entry of entries) {
+    const colorMap: Record<string, string> = {
+      rose: 'E11D48', amber: 'D97706', emerald: '059669',
+      sky: '0284C7', violet: '7C3AED', slate: '475569',
+    };
+    const colorHex = colorMap[entry.color] || '475569';
+
+    sections.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: entry.title, bold: true, size: 24, color: colorHex }),
+        ],
+        spacing: { before: 300 },
+      })
+    );
+
+    if (entry.tags.length > 0) {
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: `标签：${entry.tags.join('、')}`, size: 20, color: '999999' }),
+          ],
+          spacing: { after: 100 },
+        })
+      );
+    }
+
+    const plainText = stripHtmlContent(entry.content);
+    for (const line of plainText.split('\n')) {
+      if (line.trim()) {
+        sections.push(
+          new Paragraph({
+            children: [new TextRun({ text: line, size: 22 })],
+            spacing: { after: 60 },
+          })
+        );
+      }
+    }
+
+    sections.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: new Date(entry.updatedAt).toLocaleString('zh-CN'), size: 18, color: '999999' }),
+        ],
+        spacing: { after: 100 },
+      })
+    );
+  }
+
+  const doc = new Document({ sections: [{ children: sections }] });
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${folderName}_笔记本.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function stripHtmlContent(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || '';
 }

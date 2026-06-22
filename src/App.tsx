@@ -12,6 +12,7 @@ import DocumentViewer from './components/DocumentViewer';
 import NotePanel from './components/NotePanel';
 import VocabPanel from './components/VocabPanel';
 import NoteReadingPanel from './components/NoteReadingPanel';
+import NotebookPanel from './components/NotebookPanel';
 import SettingsPanel from './components/SettingsPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { BookOpenText, BookBookmark, X } from '@phosphor-icons/react';
@@ -21,7 +22,7 @@ function App() {
   const [currentFile, setCurrentFile] = useState<FileRecord | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [vocabWords, setVocabWords] = useState<VocabWord[]>([]);
-  const [activeTab, setActiveTab] = useState<'reading' | 'notes' | 'vocabulary' | 'settings'>('reading');
+  const [activeTab, setActiveTab] = useState<'reading' | 'notes' | 'vocabulary' | 'settings' | 'notebook'>('reading');
   const [settings, setSettings] = useState<TranslationSettings>({
     id: 'default',
     provider: 'mymemory',
@@ -377,6 +378,9 @@ function App() {
       )}
       {activeTab === 'notes' && (
         <NoteReadingPanel />
+      )}
+      {activeTab === 'notebook' && (
+        <NotebookPanel />
       )}
       {activeTab === 'settings' && (
         <SettingsPanel

@@ -47,7 +47,26 @@ export interface TranslationSettings {
   provider: TranslationProvider;
 }
 
+export interface NotebookFolder {
+  id: string;
+  name: string;
+  language: 'zh' | 'en';
+  parentId: string | null;
+  createdAt: number;
+}
+
+export interface NotebookEntry {
+  id: string;
+  folderId: string;
+  title: string;
+  content: string;
+  tags: string[];
+  color: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface AppTab {
-  id: 'reading' | 'notes' | 'vocabulary' | 'settings';
+  id: 'reading' | 'notes' | 'vocabulary' | 'settings' | 'notebook';
   label: string;
 }
